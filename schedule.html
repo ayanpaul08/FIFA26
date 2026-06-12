@@ -1,209 +1,247 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Match Schedule — FIFA World Cup 2026</title>
-  <link rel="stylesheet" href="css/style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schedule — FIFA World Cup 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#030912;--surface:#08141F;--card:#0C1E2E;--border:#162840;--gold:#FFD700;--green:#00E676;--red:#FF3B4E;--blue:#00B4FF;--text:#EDF2F7;--muted:#4A7090;--r:12px}
+html{scroll-behavior:smooth}body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh}
+a{text-decoration:none;color:inherit}
+::-webkit-scrollbar{width:5px;background:var(--surface)}::-webkit-scrollbar-thumb{background:var(--border)}
+
+.nav{position:sticky;top:0;z-index:200;background:rgba(3,9,18,.95);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1.5rem;height:60px;gap:1.5rem}
+.nav-logo{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:3px;background:linear-gradient(90deg,var(--gold),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.nav-links{display:flex;gap:.3rem;margin-left:auto}
+.nav-links a{font-size:.78rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);padding:.45rem 1rem;border-radius:8px;transition:all .2s;border:1px solid transparent}
+.nav-links a:hover,.nav-links a.active{color:var(--gold);border-color:rgba(255,215,0,.3);background:rgba(255,215,0,.06)}
+
+.page-hero{background:linear-gradient(135deg,#030912,#081828);border-bottom:1px solid var(--border);padding:2.5rem 1.5rem 2rem;text-align:center;position:relative;overflow:hidden}
+.page-hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 100% 150% at 50% 0%,rgba(255,215,0,.1) 0%,transparent 70%)}
+.page-hero h1{position:relative;font-family:'Bebas Neue',sans-serif;font-size:clamp(2.5rem,7vw,5rem);letter-spacing:4px;background:linear-gradient(90deg,var(--gold),#fff 50%,var(--gold));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.page-hero p{position:relative;color:var(--muted);font-size:.85rem;margin-top:.4rem;letter-spacing:1px}
+
+.wrap{max-width:1100px;margin:0 auto;padding:2rem 1.5rem 4rem}
+
+/* Tabs */
+.tabs{display:flex;gap:.5rem;border-bottom:2px solid var(--border);margin-bottom:2rem}
+.tab-btn{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;padding:.6rem 1.6rem;background:none;border:none;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s}
+.tab-btn.active{color:var(--gold);border-bottom-color:var(--gold)}
+.tab-btn:hover{color:var(--text)}
+.tab-pane{display:none}.tab-pane.active{display:block}
+
+/* Filter */
+.filter-bar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:1.5rem}
+.search-box{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:.5rem 1rem;color:var(--text);font-family:'Inter',sans-serif;font-size:.85rem;width:200px;outline:none;transition:border-color .2s}
+.search-box:focus{border-color:var(--gold)}.search-box::placeholder{color:var(--muted)}
+.gbtn{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:.3rem .7rem;color:var(--muted);font-size:.72rem;font-weight:800;cursor:pointer;letter-spacing:.5px;transition:all .15s}
+.gbtn:hover,.gbtn.active{background:var(--gold);color:#000;border-color:var(--gold)}
+
+/* Day block */
+.day-block{margin-bottom:2rem}
+.day-hd{
+  font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;color:var(--muted);
+  padding:.6rem 0;border-bottom:1px solid var(--border);margin-bottom:.7rem;
+  display:flex;align-items:center;gap:.8rem;
+}
+.today-pill{background:var(--green);color:#000;font-size:.62rem;font-weight:900;letter-spacing:1px;padding:.15rem .6rem;border-radius:20px}
+
+/* Schedule row */
+.sr{
+  display:grid;grid-template-columns:110px 1fr 90px;align-items:center;gap:.5rem 1rem;
+  padding:.75rem 1rem;border-radius:10px;margin-bottom:.4rem;
+  background:var(--card);border:1px solid var(--border);
+  transition:background .15s,border-color .15s;
+  position:relative;overflow:hidden;
+}
+.sr::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--sr-color,var(--border))}
+.sr:hover{background:#101F30;border-color:rgba(255,215,0,.2)}
+.sr:hover::before{background:var(--gold)}
+.sr-time{font-size:.82rem;font-weight:700;color:var(--gold)}
+.sr-time small{display:block;font-size:.65rem;color:var(--muted);font-weight:400;margin-top:2px}
+.sr-teams{display:flex;align-items:center;gap:.7rem;font-size:.85rem;font-weight:600;flex-wrap:wrap}
+.sr-team{display:flex;align-items:center;gap:.4rem}
+.sr-team a{color:rgba(255,255,255,.9);transition:color .2s}.sr-team a:hover{color:var(--gold)}
+.sr-vs{color:var(--muted);font-size:.72rem;font-weight:700}
+.sr-score{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:#fff;text-align:center}
+.sr-score .ns{font-size:.68rem;color:var(--muted);font-family:'Inter',sans-serif;font-weight:600;letter-spacing:1px}
+.sr-venue{font-size:.65rem;color:var(--muted);text-align:right}
+
+/* Knockout */
+.ko-stage{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:3px;color:var(--gold);padding:.5rem 0;border-bottom:1px solid var(--border);margin:2rem 0 .8rem}
+.ko-row{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.8rem 1.1rem;margin-bottom:.5rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;position:relative;overflow:hidden}
+.ko-row::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--ko-c,var(--blue))}
+.ko-label{font-size:.8rem;font-weight:700;color:rgba(255,255,255,.85);flex:1}
+.ko-time{font-size:.78rem;color:var(--gold);font-weight:700;white-space:nowrap}
+.ko-venue{font-size:.68rem;color:var(--muted)}
+
+.footer{border-top:1px solid var(--border);padding:1.5rem;text-align:center;font-size:.75rem;color:var(--muted)}
+.footer a{color:var(--muted)}.footer a:hover{color:var(--gold)}
+
+@media(max-width:600px){
+  .sr{grid-template-columns:90px 1fr 70px}
+  .sr-venue{display:none}
+}
+</style>
 </head>
 <body>
 
 <nav class="nav">
-  <span class="nav-brand"><a href="index.html" style="color:inherit;text-decoration:none;">WC<span>26</span></a></span>
+  <a href="index.html" class="nav-logo">WC26</a>
   <div class="nav-links">
     <a href="index.html">Home</a>
     <a href="schedule.html" class="active">Schedule</a>
   </div>
 </nav>
 
-<div class="hero" style="padding:2rem 1.5rem 1.5rem;">
-  <div class="hero-eyebrow">All Times in IST (UTC+5:30)</div>
-  <h1 class="hero-title">Match <span class="hl">Schedule</span></h1>
-  <p class="hero-sub">104 matches across 16 venues in the USA, Canada &amp; Mexico</p>
+<div class="page-hero">
+  <h1>MATCH SCHEDULE</h1>
+  <p>All 104 fixtures · All times in Indian Standard Time (IST = UTC+5:30)</p>
 </div>
 
-<div class="page-wrap">
-
-  <!-- Filter bar -->
-  <div class="filter-bar" style="margin-top:1.5rem;">
-    <input type="text" id="search-box" placeholder="Search team..." oninput="filterSchedule()">
-    <div id="group-filter-btns" style="display:flex;gap:0.4rem;flex-wrap:wrap;"></div>
-    <button class="group-filter-btn active" onclick="clearGroupFilter(this)">ALL</button>
+<div class="wrap">
+  <div class="filter-bar">
+    <input class="search-box" id="q" type="text" placeholder="🔍 Search team..." oninput="filter()">
+    <div id="gbtns" style="display:flex;gap:.4rem;flex-wrap:wrap"></div>
+    <button class="gbtn active" onclick="clearG(this)">ALL</button>
   </div>
 
-  <!-- Tabs -->
   <div class="tabs">
-    <button class="tab-btn active" onclick="switchTab('group', this)">Group Stage</button>
-    <button class="tab-btn" onclick="switchTab('knockout', this)">Knockout Stage</button>
+    <button class="tab-btn active" onclick="switchTab('group',this)">Group Stage (72)</button>
+    <button class="tab-btn" onclick="switchTab('ko',this)">Knockout Stage (32)</button>
   </div>
 
-  <!-- GROUP STAGE TAB -->
-  <div class="tab-pane active" id="tab-group">
-    <div id="group-schedule"></div>
-  </div>
-
-  <!-- KNOCKOUT TAB -->
-  <div class="tab-pane" id="tab-knockout">
-    <div id="knockout-schedule"></div>
-  </div>
-
+  <div class="tab-pane active" id="tab-group" ></div>
+  <div class="tab-pane" id="tab-ko"></div>
 </div>
 
-<footer class="footer">
-  <p>All kickoff times shown in Indian Standard Time (IST = UTC + 5:30)</p>
-  <p style="margin-top:.3rem;"><a href="index.html">← Back to Home</a></p>
-</footer>
+<div class="footer">
+  <p>All kickoff times in IST (UTC+5:30) &nbsp;·&nbsp; <a href="index.html">← Home</a></p>
+</div>
 
 <script src="js/data.js"></script>
 <script src="js/app.js"></script>
 <script>
 (function(){
+  const IST=5.5*3600000;
+  function toIST(u){return new Date(new Date(u).getTime()+IST)}
+  function fmtTime(u){return toIST(u).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'UTC'})}
+  function fmtDate(u){return toIST(u).toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:'UTC'})}
+  function fmtShort(u){return toIST(u).toLocaleDateString('en-IN',{day:'numeric',month:'short',timeZone:'UTC'})}
 
-  // ── Helpers ─────────────────────────────────────────
-  function sch(m) {
-    const isGroup = ['A','B','C','D','E','F','G','H','I','J','K','L'].includes(m.grp);
-    const home = isGroup ? TEAMS[m.home] : null;
-    const away = isGroup ? TEAMS[m.away] : null;
-    const isFT  = m.st === 'FT';
-    const isNS  = m.st === 'NS';
-    const isLive = m.st === 'LIVE';
+  const GROUPS=['A','B','C','D','E','F','G','H','I','J','K','L'];
+  const gm=MATCHES.filter(m=>GROUPS.includes(m.grp));
 
-    const teamsHtml = isGroup
-      ? `<div class="sch-team">${home.flag} <a href="team.html?team=${m.home}">${home.name}</a></div>
-         <span class="sch-vs">vs</span>
-         <div class="sch-team">${away.flag} <a href="team.html?team=${m.away}">${away.name}</a></div>`
-      : `<span style="color:var(--muted);font-size:0.82rem;">${m.label || 'TBD vs TBD'}</span>`;
+  // Today check
+  const n=new Date();const ni=new Date(n.getTime()+IST);
+  const todayShort=ni.toLocaleDateString('en-IN',{day:'numeric',month:'short',timeZone:'UTC'});
 
-    const resultHtml = isFT
-      ? `<div class="sch-score">${m.hs} – ${m.as}<br><small style="font-family:Inter;font-size:.6rem;color:var(--green);">FT</small></div>`
-      : isLive
-      ? `<div class="sch-score">${m.hs||0} – ${m.as||0}<br><small style="font-family:Inter;font-size:.6rem;color:var(--red);">LIVE</small></div>`
-      : `<div class="sch-score"><span class="ns">—</span></div>`;
+  // By date
+  const byDate={};
+  gm.forEach(m=>{
+    const d=fmtDate(m.utc);
+    (byDate[d]=byDate[d]||[]).push(m);
+  });
 
-    const istTime = formatISTTime(m.utc);
-    const istDate = toIST(m.utc).toLocaleDateString('en-IN',{day:'numeric',month:'short',timeZone:'UTC'});
+  // Group colors
+  const gCols={A:'#FF6B35',B:'#FFD700',C:'#00E676',D:'#00B4FF',
+               E:'#FF3B4E',F:'#B24BF3',G:'#FF8C00',H:'#00D4AA',
+               I:'#FF4570',J:'#43E8FF',K:'#FFB347',L:'#7DFF6B'};
 
-    return `<div class="schedule-row"
-                 data-home="${m.home||''}" data-away="${m.away||''}"
-                 data-group="${m.grp}"
-                 data-label="${(m.label||'').toLowerCase()}">
-      <div class="sch-time">${istTime}<small>${istDate}</small></div>
-      <div class="sch-teams">${teamsHtml}</div>
-      ${resultHtml}
+  function srHtml(m){
+    const h=TEAMS[m.home],a=TEAMS[m.away];
+    const isFT=m.st==='FT',isLive=m.st==='LIVE';
+    const teamHtml=`<div class="sr-team">${h.flag} <a href="team.html?team=${m.home}">${h.name}</a></div>
+      <span class="sr-vs">vs</span>
+      <div class="sr-team">${a.flag} <a href="team.html?team=${m.away}">${a.name}</a></div>`;
+    const scoreHtml=isFT
+      ?`<div class="sr-score">${m.hs} – ${m.as}<br><span class="ns" style="color:var(--green)">FT</span></div>`
+      :isLive
+      ?`<div class="sr-score">${m.hs||0} – ${m.as||0}<br><span class="ns" style="color:var(--red)">LIVE</span></div>`
+      :`<div class="sr-score"><span class="ns">– – –</span></div>`;
+    const col=gCols[m.grp]||'#666';
+    return`<div class="sr" style="--sr-color:${col}"
+               data-h="${m.home}" data-a="${m.away}" data-g="${m.grp}">
+      <div class="sr-time">${fmtTime(m.utc)}<small>${fmtShort(m.utc)} · Grp ${m.grp}</small></div>
+      <div class="sr-teams">${teamHtml}</div>
+      ${scoreHtml}
     </div>`;
   }
 
-  // ── GROUP STAGE: organised by IST date ───────────────
-  const groupMatches = MATCHES.filter(m =>
-    ['A','B','C','D','E','F','G','H','I','J','K','L'].includes(m.grp)
-  );
-
-  // Group by IST date
-  const byDate = {};
-  const todayIST = toIST(new Date().toISOString())
-    .toLocaleDateString('en-IN',{timeZone:'UTC',day:'numeric',month:'short',year:'numeric'});
-
-  groupMatches.forEach(m => {
-    const d = toIST(m.utc).toLocaleDateString('en-IN',
-      {weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'UTC'});
-    if (!byDate[d]) byDate[d] = [];
-    byDate[d].push(m);
+  // Render group schedule
+  let groupHtml='';
+  Object.entries(byDate).forEach(([date,matches])=>{
+    const isToday=fmtShort(matches[0].utc)===todayShort;
+    groupHtml+=`<div class="day-block">
+      <div class="day-hd">${date}${isToday?' <span class="today-pill">TODAY</span>':''}</div>
+      ${matches.map(srHtml).join('')}
+    </div>`;
   });
+  document.getElementById('tab-group').innerHTML=groupHtml;
 
-  const groupDiv = document.getElementById('group-schedule');
-  let groupHtml = '';
-  for (const [date, matches] of Object.entries(byDate)) {
-    const shortDate = toIST(matches[0].utc).toLocaleDateString('en-IN',
-      {day:'numeric', month:'short', timeZone:'UTC'});
-    const isToday = shortDate === todayIST.split(' ').slice(0,2).join(' ');
-    const todayTag = isToday ? '<span class="today-tag">TODAY</span>' : '';
-    groupHtml += `
-      <div class="day-block">
-        <div class="day-header">${date} ${todayTag}</div>
-        ${matches.map(sch).join('')}
-      </div>`;
-  }
-  groupDiv.innerHTML = groupHtml;
-
-  // ── GROUP FILTER BUTTONS ─────────────────────────────
-  const groups = ['A','B','C','D','E','F','G','H','I','J','K','L'];
-  const btnContainer = document.getElementById('group-filter-btns');
-  let activeGroup = null;
-
-  btnContainer.innerHTML = groups.map(g =>
-    `<button class="group-filter-btn" onclick="setGroupFilter('${g}',this)">GRP ${g}</button>`
-  ).join('');
-
-  window.setGroupFilter = function(g, btn) {
-    activeGroup = g;
-    document.querySelectorAll('.group-filter-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    filterSchedule();
-  };
-
-  window.clearGroupFilter = function(btn) {
-    activeGroup = null;
-    document.querySelectorAll('.group-filter-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    filterSchedule();
-  };
-
-  window.filterSchedule = function() {
-    const q = (document.getElementById('search-box').value || '').toLowerCase();
-    document.querySelectorAll('.schedule-row').forEach(row => {
-      const home  = (row.dataset.home  || '').replace(/_/g,' ');
-      const away  = (row.dataset.away  || '').replace(/_/g,' ');
-      const label = row.dataset.label  || '';
-      const grp   = row.dataset.group  || '';
-      const matchesSearch = !q || home.includes(q) || away.includes(q) || label.includes(q);
-      const matchesGroup  = !activeGroup || grp === activeGroup;
-      row.style.display = (matchesSearch && matchesGroup) ? '' : 'none';
-    });
-    // Hide empty day-blocks
-    document.querySelectorAll('.day-block').forEach(block => {
-      const visible = [...block.querySelectorAll('.schedule-row')]
-        .some(r => r.style.display !== 'none');
-      block.style.display = visible ? '' : 'none';
-    });
-  };
-
-  // ── KNOCKOUT SCHEDULE ────────────────────────────────
-  const koStages = [
-    { key:'R32', label:'Round of 32', color:'var(--accent)' },
-    { key:'R16', label:'Round of 16', color:'var(--green)' },
-    { key:'QF',  label:'Quarter-Finals', color:'var(--gold)' },
-    { key:'SF',  label:'Semi-Finals', color:'#FF8C00' },
-    { key:'3P',  label:'Third Place Play-off', color:'var(--muted)' },
-    { key:'FIN', label:'🏆 THE FINAL', color:'var(--gold)' },
+  // Knockout
+  const koStages=[
+    {k:'R32',l:'Round of 32',c:'var(--blue)'},
+    {k:'R16',l:'Round of 16',c:'var(--green)'},
+    {k:'QF', l:'Quarter-Finals',c:'var(--gold)'},
+    {k:'SF', l:'Semi-Finals',c:'#FF8C00'},
+    {k:'3P', l:'Third Place Play-off',c:'var(--muted)'},
+    {k:'FIN',l:'🏆 THE FINAL',c:'var(--gold)'},
   ];
-
-  const koDiv = document.getElementById('knockout-schedule');
-  let koHtml = '';
-
-  koStages.forEach(({ key, label, color }) => {
-    const stageMatches = MATCHES.filter(m => m.grp === key);
-    if (!stageMatches.length) return;
-    koHtml += `<div class="ko-stage-header" style="color:${color};">${label}</div>`;
-    stageMatches.forEach(m => {
-      const ist = formatIST(m.utc);
-      koHtml += `
-        <div class="ko-row">
-          <div class="ko-label">${m.label || 'TBD vs TBD'}</div>
-          <div class="ko-time">🕐 ${ist}</div>
-          <div class="ko-tbd">📍 ${m.venue}</div>
-        </div>`;
+  let koHtml='';
+  koStages.forEach(({k,l,c})=>{
+    const ms=MATCHES.filter(m=>m.grp===k);if(!ms.length)return;
+    koHtml+=`<div class="ko-stage" style="color:${c}">${l}</div>`;
+    ms.forEach(m=>{
+      const ist=toIST(m.utc);
+      const tStr=ist.toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'UTC'})+' IST';
+      koHtml+=`<div class="ko-row" style="--ko-c:${c}">
+        <div class="ko-label">${m.label||'TBD vs TBD'}</div>
+        <div class="ko-time">🕐 ${tStr}</div>
+        <div class="ko-venue">📍 ${m.venue}</div>
+      </div>`;
     });
   });
-  koDiv.innerHTML = koHtml;
+  document.getElementById('tab-ko').innerHTML=koHtml;
 
-  // ── TAB SWITCHER ─────────────────────────────────────
-  window.switchTab = function(name, btn) {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('tab-' + name).classList.add('active');
+  // Group filter buttons
+  const gbtns=document.getElementById('gbtns');
+  let activeG=null;
+  gbtns.innerHTML=GROUPS.map(g=>`<button class="gbtn" onclick="setG('${g}',this)">GRP ${g}</button>`).join('');
+
+  window.setG=(g,btn)=>{
+    activeG=g;
+    document.querySelectorAll('.gbtn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');filter();
+  };
+  window.clearG=(btn)=>{
+    activeG=null;
+    document.querySelectorAll('.gbtn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');filter();
+  };
+  window.filter=()=>{
+    const q=(document.getElementById('q').value||'').toLowerCase();
+    document.querySelectorAll('.sr').forEach(r=>{
+      const h=(r.dataset.h||'').replace(/_/g,' ');
+      const a=(r.dataset.a||'').replace(/_/g,' ');
+      const g=r.dataset.g;
+      const ok=(!q||h.includes(q)||a.includes(q))&&(!activeG||g===activeG);
+      r.style.display=ok?'':'none';
+    });
+    document.querySelectorAll('.day-block').forEach(b=>{
+      const vis=[...b.querySelectorAll('.sr')].some(r=>r.style.display!=='none');
+      b.style.display=vis?'':'none';
+    });
   };
 
+  window.switchTab=(name,btn)=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-'+name).classList.add('active');
+  };
 })();
 </script>
 </body>

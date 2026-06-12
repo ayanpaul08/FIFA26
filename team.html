@@ -1,260 +1,288 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Team Profile — FIFA World Cup 2026</title>
-  <link rel="stylesheet" href="css/style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Team — FIFA World Cup 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#030912;--surface:#08141F;--card:#0C1E2E;--border:#162840;--gold:#FFD700;--green:#00E676;--red:#FF3B4E;--blue:#00B4FF;--text:#EDF2F7;--muted:#4A7090;--r:12px}
+html{scroll-behavior:smooth}body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh}
+a{text-decoration:none;color:inherit}
+::-webkit-scrollbar{width:5px;background:var(--surface)}::-webkit-scrollbar-thumb{background:var(--border)}
+
+.nav{position:sticky;top:0;z-index:200;background:rgba(3,9,18,.95);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1.5rem;height:60px;gap:1.5rem}
+.nav-logo{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:3px;background:linear-gradient(90deg,var(--gold),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.nav-links{display:flex;gap:.3rem;margin-left:auto}
+.nav-links a{font-size:.78rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);padding:.45rem 1rem;border-radius:8px;transition:all .2s;border:1px solid transparent}
+.nav-links a:hover{color:var(--gold);border-color:rgba(255,215,0,.3);background:rgba(255,215,0,.06)}
+
+/* TEAM HERO */
+.team-hero{position:relative;min-height:320px;display:flex;align-items:flex-end;padding:0 1.5rem 2.5rem;overflow:hidden}
+.th-bg{position:absolute;inset:0;background:var(--th-grad);opacity:.7}
+.th-overlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(3,9,18,.1) 0%,rgba(3,9,18,.7) 60%,var(--bg) 100%)}
+.th-content{position:relative;z-index:1;display:flex;align-items:flex-end;gap:2rem;flex-wrap:wrap;width:100%;max-width:1100px;margin:0 auto}
+.th-flag{font-size:6rem;filter:drop-shadow(0 8px 24px rgba(0,0,0,.7));line-height:1;flex-shrink:0}
+.th-text h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(2.8rem,8vw,6rem);letter-spacing:4px;color:#fff;line-height:1;text-shadow:0 4px 20px rgba(0,0,0,.8)}
+.th-text .sub{font-size:.85rem;color:rgba(255,255,255,.6);margin-top:.4rem;display:flex;align-items:center;gap:.8rem;flex-wrap:wrap}
+.grp-badge{font-family:'Bebas Neue',sans-serif;background:var(--gold);color:#000;font-size:.85rem;letter-spacing:1px;padding:.15rem .6rem;border-radius:6px}
+.score-ring{
+  margin-left:auto;flex-shrink:0;
+  width:90px;height:90px;border-radius:50%;
+  border:3px solid var(--gold);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:rgba(0,0,0,.5);backdrop-filter:blur(8px);
+}
+.score-ring .n{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;color:var(--gold);line-height:1}
+.score-ring .l{font-size:.5rem;color:var(--muted);font-weight:700;letter-spacing:1px;text-align:center;line-height:1.3}
+
+/* CONTENT */
+.wrap{max-width:1100px;margin:0 auto;padding:2rem 1.5rem 4rem}
+.sec-head{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:3px;color:var(--gold);display:flex;align-items:center;gap:.8rem;margin-bottom:1rem}
+.sec-head::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(255,215,0,.4),transparent)}
+
+/* Stat row */
+.stat-row{display:flex;gap:.8rem;flex-wrap:wrap;margin-bottom:1.8rem}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.9rem 1.2rem;flex:1;min-width:100px}
+.stat-card .v{font-family:'Bebas Neue',sans-serif;color:var(--gold);font-size:1.8rem;line-height:1}
+.stat-card .v.sm{font-size:1rem;font-family:'Inter',sans-serif;font-weight:800;color:var(--gold)}
+.stat-card .l{font-size:.62rem;color:var(--muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-top:.2rem}
+
+/* Bio */
+.bio-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.4rem;margin-bottom:1.5rem;line-height:1.9;font-size:.87rem;color:rgba(255,255,255,.8)}
+.bio-card h3{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--green);margin-bottom:.7rem}
+
+/* Trivia */
+.trivia{background:linear-gradient(135deg,rgba(255,215,0,.06),rgba(255,215,0,.02));border:1px solid rgba(255,215,0,.2);border-left:4px solid var(--gold);border-radius:10px;padding:1.1rem 1.3rem;margin-bottom:1.8rem;font-size:.87rem;line-height:1.8;color:rgba(255,255,255,.8)}
+.trivia strong{color:var(--gold);display:block;font-size:.65rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.4rem}
+
+/* Fixtures */
+.fx-row{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.75rem 1rem;margin-bottom:.5rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;position:relative;overflow:hidden;transition:border-color .2s}
+.fx-row:hover{border-color:rgba(255,215,0,.3)}
+.fx-row::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--fx-c,var(--border))}
+.fx-time{font-size:.75rem;font-weight:700;color:var(--gold);min-width:90px}
+.fx-teams{flex:1;font-size:.84rem;font-weight:600;color:rgba(255,255,255,.9)}
+.fx-teams a{color:var(--gold)}.fx-teams a:hover{text-decoration:underline}
+.fx-score{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;min-width:50px;text-align:center}
+.fx-score.w{color:var(--green)}.fx-score.l{color:var(--red)}.fx-score.d{color:var(--muted)}
+.fx-countdown{font-family:'Orbitron',monospace;font-size:.78rem;color:var(--gold);min-width:140px;text-align:right}
+
+/* Squad score bar */
+.sq-score-wrap{margin-bottom:1.8rem}
+.sq-bar{height:10px;border-radius:5px;background:var(--border);margin-bottom:.6rem;overflow:hidden}
+.sq-fill{height:100%;border-radius:5px;background:linear-gradient(90deg,var(--sq-c1),var(--sq-c2))}
+.sq-info{display:flex;align-items:center;gap:1.2rem;margin-bottom:.8rem}
+.sq-num{font-family:'Bebas Neue',sans-serif;font-size:3.5rem;line-height:1}
+.sq-tier{font-weight:800;font-size:1rem}
+.sq-sub{font-size:.72rem;color:var(--muted);margin-top:.2rem}
+
+/* Squad table */
+.tbl-wrap{overflow-x:auto;margin-bottom:2rem}
+.sq-table{width:100%;border-collapse:collapse;font-size:.8rem;min-width:580px}
+.sq-table th{background:var(--surface);font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--muted);padding:.6rem .8rem;text-align:center;border-bottom:2px solid var(--border);white-space:nowrap}
+.sq-table th:nth-child(1),.sq-table th:nth-child(2){text-align:left}
+.sq-table td{padding:.5rem .8rem;text-align:center;border-bottom:1px solid rgba(22,40,64,.4)}
+.sq-table td:nth-child(1),.sq-table td:nth-child(2){text-align:left}
+.sq-table tr:hover td{background:rgba(255,215,0,.03)}
+.pos-badge{display:inline-block;font-size:.58rem;font-weight:900;letter-spacing:1px;padding:.15rem .45rem;border-radius:4px;text-transform:uppercase}
+.GK{background:rgba(255,59,78,.15);color:var(--red)}
+.DEF{background:rgba(0,180,255,.12);color:var(--blue)}
+.MID{background:rgba(0,230,118,.12);color:var(--green)}
+.FWD{background:rgba(255,215,0,.12);color:var(--gold)}
+.r-bar{display:flex;align-items:center;gap:.4rem}
+.r-val{font-weight:800;color:#fff;min-width:26px}
+.r-track{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.r-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--green),var(--gold))}
+.row-num{color:var(--muted);font-size:.72rem}
+
+/* Group teammates */
+.teammates{display:flex;gap:.8rem;flex-wrap:wrap;margin-bottom:2rem}
+.teammate-card{
+  background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:.9rem 1.3rem;display:flex;align-items:center;gap:.8rem;
+  transition:border-color .2s,transform .2s;cursor:pointer;
+}
+.teammate-card:hover{border-color:var(--gold);transform:translateY(-2px)}
+.tm-flag{font-size:2.2rem}
+.tm-name{font-weight:800;font-size:.9rem}
+.tm-sub{font-size:.7rem;color:var(--muted);margin-top:.2rem}
+.tm-sub strong{color:var(--gold)}
+
+.countdown-inline{font-family:'Orbitron',monospace;font-size:.75rem;color:var(--gold)}
+.footer{border-top:1px solid var(--border);padding:1.5rem;text-align:center;font-size:.75rem;color:var(--muted)}
+.footer a{color:var(--muted)}.footer a:hover{color:var(--gold)}
+@media(max-width:600px){.th-flag{font-size:4rem}.score-ring{width:70px;height:70px}.score-ring .n{font-size:1.7rem}}
+</style>
 </head>
 <body>
 
 <nav class="nav">
-  <span class="nav-brand"><a href="index.html" style="color:inherit;text-decoration:none;">WC<span>26</span></a></span>
+  <a href="index.html" class="nav-logo">WC26</a>
   <div class="nav-links">
     <a href="index.html">Home</a>
     <a href="schedule.html">Schedule</a>
   </div>
 </nav>
 
-<!-- HERO (populated by JS) -->
-<div class="team-hero" id="team-hero">
-  <div class="team-hero-bg" id="team-hero-bg"></div>
-  <div class="team-hero-content">
-    <div class="team-flag-giant" id="hero-flag"></div>
-    <div class="team-hero-text">
-      <h1 id="hero-name">Loading…</h1>
-      <p class="sub" id="hero-sub"></p>
+<div class="team-hero" id="th">
+  <div class="th-bg" id="th-bg"></div>
+  <div class="th-overlay"></div>
+  <div class="th-content">
+    <div class="th-flag" id="th-flag"></div>
+    <div class="th-text">
+      <h1 id="th-name">Loading…</h1>
+      <div class="sub" id="th-sub"></div>
     </div>
-    <div class="squad-score-badge" id="squad-score-badge">
-      <div class="num" id="score-num">–</div>
-      <div class="lbl">SQUAD<br>SCORE</div>
+    <div class="score-ring" id="score-ring">
+      <div class="n" id="score-n">–</div>
+      <div class="l">SQUAD<br>SCORE</div>
     </div>
   </div>
 </div>
 
-<div class="page-wrap">
-
-  <!-- STAT ROW -->
-  <div class="stat-row" id="stat-row" style="margin-top:1.5rem;"></div>
-
-  <!-- BIO -->
-  <div class="bio-section" id="bio-section">
-    <h3>⚽ THE STORY SO FAR</h3>
-    <p id="bio-text"></p>
-  </div>
-
-  <!-- TRIVIA -->
-  <div class="trivia-box" id="trivia-box">
-    <strong>⚡ Did You Know?</strong>
-    <span id="trivia-text"></span>
-  </div>
-
-  <!-- GROUP FIXTURES -->
-  <div class="section-label" style="margin-bottom:1rem;">📅 GROUP STAGE FIXTURES</div>
-  <div class="fixtures-mini" id="fixtures-section"></div>
-
-  <!-- SQUAD SCORE BAR -->
-  <div class="section-label" style="margin-bottom:0.8rem;">🎮 SQUAD STRENGTH</div>
-  <div style="margin-bottom:1.5rem;" id="squad-score-section"></div>
-
-  <!-- PLAYER SQUAD TABLE -->
-  <div class="section-label" style="margin-bottom:1rem;">👥 SQUAD</div>
-  <div class="squad-table-wrap">
-    <table class="squad-table" id="squad-table">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Name</th>
-          <th>Pos</th>
-          <th>Age</th>
-          <th>Club</th>
-          <th id="stat1-head">Goals</th>
-          <th id="stat2-head">Assists</th>
-          <th>Caps</th>
-          <th>Rating</th>
-        </tr>
-      </thead>
-      <tbody id="squad-tbody"></tbody>
+<div class="wrap">
+  <div class="stat-row" id="stat-row"></div>
+  <div class="sec-head">⚽ THE STORY</div>
+  <div class="bio-card" id="bio-card"><h3 id="bio-h3">Bio</h3><p id="bio-txt"></p></div>
+  <div class="trivia" id="trivia-box"><strong>⚡ Did You Know?</strong><span id="trivia-txt"></span></div>
+  <div class="sec-head">📅 GROUP STAGE FIXTURES</div>
+  <div id="fixtures"></div>
+  <div class="sec-head" style="margin-top:2rem">🎮 SQUAD STRENGTH</div>
+  <div class="sq-score-wrap" id="sq-score-wrap"></div>
+  <div class="sec-head">👥 SQUAD</div>
+  <div class="tbl-wrap">
+    <table class="sq-table">
+      <thead><tr><th>#</th><th>Name</th><th>Pos</th><th>Age</th><th>Club</th><th>Goals/Saves</th><th>Assists</th><th>Caps</th><th>Rating</th></tr></thead>
+      <tbody id="sq-tbody"></tbody>
     </table>
   </div>
-
-  <!-- OTHER TEAMS IN GROUP -->
-  <div class="section-label" style="margin-bottom:1rem;">🔗 ALSO IN GROUP</div>
-  <div id="group-teammates" style="display:flex;gap:0.8rem;flex-wrap:wrap;margin-bottom:2rem;"></div>
-
+  <div class="sec-head">🔗 ALSO IN GROUP</div>
+  <div class="teammates" id="teammates"></div>
 </div>
 
-<footer class="footer">
-  <p>All squad ratings are EA Sports FC 25 estimates &nbsp;·&nbsp; Squad score = avg rating scaled 0–100</p>
-  <p style="margin-top:.3rem;"><a href="index.html">← Home</a> &nbsp;·&nbsp; <a href="schedule.html">Schedule</a></p>
-</footer>
+<div class="footer">
+  <p>Ratings: EA Sports FC estimates &nbsp;·&nbsp; Squad Score = avg rating scaled 0–100 &nbsp;·&nbsp; <a href="index.html">← Home</a></p>
+</div>
 
 <script src="js/data.js"></script>
 <script src="js/app.js"></script>
 <script>
 (function(){
-  const params = new URLSearchParams(location.search);
-  const tid = params.get('team') || 'argentina';
-  const team = TEAMS[tid];
-
-  if (!team) {
-    document.body.innerHTML = '<div style="text-align:center;padding:4rem;color:var(--muted);">Team not found. <a href="index.html">Go home</a></div>';
-    return;
+  const IST=5.5*3600000;
+  function toIST(u){return new Date(new Date(u).getTime()+IST)}
+  function fmtIST(u){return toIST(u).toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'UTC'})+' IST'}
+  function countdown(u){
+    const d=new Date(u)-new Date();if(d<=0)return null;
+    return{D:Math.floor(d/86400000),H:Math.floor(d%86400000/3600000),M:Math.floor(d%3600000/60000),S:Math.floor(d%60000/1000)};
   }
+  function cdStr(u){
+    const c=countdown(u);if(!c)return'Ended';
+    return`${String(c.D).padStart(2,'0')}D:${String(c.H).padStart(2,'0')}H:${String(c.M).padStart(2,'0')}M:${String(c.S).padStart(2,'0')}S`;
+  }
+  function startCD(el,u){const go=()=>{el.textContent=cdStr(u)};go();return setInterval(go,1000)}
 
-  document.title = `${team.name} — FIFA World Cup 2026`;
+  const p=new URLSearchParams(location.search);
+  const tid=p.get('team')||'argentina';
+  const T=TEAMS[tid];
+  if(!T){document.body.innerHTML='<div style="text-align:center;padding:4rem;color:#4A7090">Team not found. <a href="index.html" style="color:#FFD700">← Home</a></div>';return}
+  document.title=`${T.name} — FIFA World Cup 2026`;
 
-  // ── HERO ──────────────────────────────────────────────
-  const [c1, c2] = team.colors;
-  document.getElementById('team-hero-bg').style.background =
-    `linear-gradient(135deg, ${c1}cc 0%, ${c2}66 50%, #04080F 100%)`;
-  document.getElementById('hero-flag').textContent = team.flag;
-  document.getElementById('hero-name').textContent = team.name;
-  document.getElementById('hero-sub').innerHTML =
-    `<span class="group-badge">${team.group}</span> &nbsp; GROUP ${team.group} &nbsp;·&nbsp; FIFA Rank: <strong>#${team.fifa_rank}</strong>`;
+  // HERO
+  const [c1,c2]=T.colors;
+  document.getElementById('th-bg').style.background=`linear-gradient(135deg,${c1} 0%,${c1}88 30%,${c2}66 70%,${c2} 100%)`;
+  document.getElementById('th-flag').textContent=T.flag;
+  document.getElementById('th-name').textContent=T.name;
+  document.getElementById('th-sub').innerHTML=
+    `<span class="grp-badge">${T.group}</span> Group ${T.group} &nbsp;·&nbsp; FIFA Rank <strong>#${T.fifa_rank}</strong> &nbsp;·&nbsp; ${T.cap}`;
 
   // Squad score
-  const players = PLAYERS[tid] || [];
-  const score = getSquadScore(players);
-  document.getElementById('score-num').textContent = score;
+  const players=PLAYERS[tid]||[];
+  const score=getSquadScore(players);
+  document.getElementById('score-n').textContent=score;
 
-  // ── STATS ROW ─────────────────────────────────────────
-  const stats = [
-    { val: team.fifa_rank, lbl: 'FIFA Rank', prefix: '#' },
-    { val: team.wc_apps,   lbl: 'WC Apps' },
-    { val: team.best,      lbl: 'Best Finish', small: true },
-    { val: team.founded,   lbl: 'Federation Est.' },
-    { val: team.pop,       lbl: 'Population' },
-  ];
-  document.getElementById('stat-row').innerHTML = stats.map(s => `
-    <div class="stat-card">
-      <div class="val" style="font-size:${s.small?'1rem':'1.7rem'}">${s.prefix||''}${s.val}</div>
-      <div class="lbl">${s.lbl}</div>
-    </div>`).join('');
+  // Stats
+  document.getElementById('stat-row').innerHTML=[
+    {v:`#${T.fifa_rank}`,l:'FIFA Rank'},
+    {v:T.wc_apps,l:'WC Appearances'},
+    {v:T.best,l:'Best Finish',sm:true},
+    {v:T.founded,l:'Fed. Founded'},
+    {v:T.pop,l:'Population'},
+  ].map(s=>`<div class="stat-card"><div class="v ${s.sm?'sm':''}">${s.v}</div><div class="l">${s.l}</div></div>`).join('');
 
-  // ── BIO ───────────────────────────────────────────────
-  document.getElementById('bio-text').textContent = team.bio || 'More information coming soon.';
+  // Bio
+  document.getElementById('bio-h3').textContent=`${T.flag} ${T.name}`;
+  document.getElementById('bio-txt').textContent=T.bio||'Information coming soon.';
+  document.getElementById('trivia-txt').textContent=T.trivia||'Football history in the making.';
 
-  // ── TRIVIA ────────────────────────────────────────────
-  document.getElementById('trivia-text').textContent = team.trivia || 'Football history in the making.';
-
-  // ── FIXTURES ──────────────────────────────────────────
-  const teamMatches = MATCHES.filter(m =>
-    (m.home === tid || m.away === tid) &&
-    ['A','B','C','D','E','F','G','H','I','J','K','L'].includes(m.grp)
-  );
-
-  const fixturesHtml = teamMatches.map(m => {
-    const isHome = m.home === tid;
-    const opp = TEAMS[isHome ? m.away : m.home];
-    const isFT = m.st === 'FT';
-    const isNS = m.st === 'NS';
-
-    let resultHtml = '', resultCls = '';
-    if (isFT) {
-      const myScore = isHome ? m.hs : m.as;
-      const oppScore = isHome ? m.as : m.hs;
-      resultCls = myScore > oppScore ? 'w' : myScore < oppScore ? 'l' : 'd';
-      resultHtml = `<div class="fixture-result ${resultCls}">${m.hs}–${m.as}</div>`;
+  // Fixtures
+  const GROUPS=['A','B','C','D','E','F','G','H','I','J','K','L'];
+  const tm=MATCHES.filter(m=>(m.home===tid||m.away===tid)&&GROUPS.includes(m.grp));
+  const fxColors=['var(--gold)','var(--green)','var(--blue)'];
+  document.getElementById('fixtures').innerHTML=tm.map((m,i)=>{
+    const isH=m.home===tid;
+    const opp=TEAMS[isH?m.away:m.home];
+    const isFT=m.st==='FT';const isNS=m.st==='NS';
+    let scHtml='';let scCls='';
+    if(isFT){
+      const my=isH?m.hs:m.as,op=isH?m.as:m.hs;
+      scCls=my>op?'w':my<op?'l':'d';
+      scHtml=`<div class="fx-score ${scCls}">${m.hs}–${m.as}</div>`;
     } else {
-      const cdId = `fcd-${m.id}`;
-      resultHtml = `<div class="fixture-result" id="${cdId}" style="font-size:.72rem;color:var(--muted);"></div>`;
+      scHtml=`<span class="fx-countdown" id="fcd-${m.id}"></span>`;
     }
-
-    return `<div class="fixture-row">
-      <div class="fixture-time">${formatIST(m.utc)}</div>
-      <div class="fixture-teams">
-        ${isHome ? `<strong>${team.flag} ${team.name}</strong> vs ${opp.flag} <a href="team.html?team=${isHome?m.away:m.home}">${opp.name}</a>`
-                 : `${opp.flag} <a href="team.html?team=${isHome?m.away:m.home}">${opp.name}</a> vs <strong>${team.flag} ${team.name}</strong>`}
-      </div>
-      ${resultHtml}
+    const teamLine=isH
+      ?`<strong>${T.flag} ${T.name}</strong> vs ${opp.flag} <a href="team.html?team=${isH?m.away:m.home}">${opp.name}</a>`
+      :`${opp.flag} <a href="team.html?team=${isH?m.away:m.home}">${opp.name}</a> vs <strong>${T.flag} ${T.name}</strong>`;
+    return`<div class="fx-row" style="--fx-c:${fxColors[i%3]}">
+      <div class="fx-time">${fmtIST(m.utc)}</div>
+      <div class="fx-teams">${teamLine}</div>
+      ${scHtml}
     </div>`;
   }).join('');
+  tm.filter(m=>m.st==='NS').forEach(m=>{const el=document.getElementById('fcd-'+m.id);if(el)startCD(el,m.utc)});
 
-  document.getElementById('fixtures-section').innerHTML = fixturesHtml;
-
-  // Countdown for NS fixtures
-  teamMatches.filter(m => m.st === 'NS').forEach(m => {
-    const el = document.getElementById(`fcd-${m.id}`);
-    if (el) startCountdown(el, m.utc);
-  });
-
-  // ── SQUAD SCORE VISUAL ───────────────────────────────
-  const scoreSection = document.getElementById('squad-score-section');
-  const tier = score >= 80 ? { label:'World Class', color:'var(--gold)' }
-             : score >= 60 ? { label:'Strong', color:'var(--green)' }
-             : score >= 40 ? { label:'Competitive', color:'var(--accent)' }
-             : { label:'Developing', color:'var(--muted)' };
-
-  scoreSection.innerHTML = `
-    <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:.5rem;">
-      <span style="font-family:'Bebas Neue',sans-serif;font-size:2.5rem;color:${tier.color};line-height:1;">${score}</span>
-      <div>
-        <div style="font-weight:700;color:${tier.color};">${tier.label}</div>
-        <div style="font-size:.75rem;color:var(--muted);">Based on avg EA Sports FC rating of ${players.length} players</div>
-      </div>
+  // Squad score bar
+  const tier=score>=80?{l:'World Class',c:c1}:score>=65?{l:'Strong',c:'#00E676'}:score>=45?{l:'Competitive',c:'#00B4FF'}:{l:'Developing',c:'#4A7090'};
+  document.getElementById('sq-score-wrap').innerHTML=`
+    <div class="sq-info">
+      <div class="sq-num" style="color:${c1}">${score}</div>
+      <div><div class="sq-tier" style="color:${c1}">${tier.l}</div>
+        <div class="sq-sub">Based on avg EA FC rating of ${players.length} players</div></div>
     </div>
-    <div class="squad-score-bar"><div class="squad-score-fill" style="width:${score}%;background:linear-gradient(90deg,${c1},${c2});"></div></div>
-    <div class="squad-score-label">0 ← Developing &nbsp;&nbsp; Competitive → 100</div>`;
+    <div class="sq-bar"><div class="sq-fill" style="width:${score}%;--sq-c1:${c1};--sq-c2:${c2}"></div></div>
+    <div style="font-size:.7rem;color:var(--muted)">0 — Developing &nbsp;&nbsp;&nbsp; Competitive — 100</div>`;
 
-  // ── SQUAD TABLE ───────────────────────────────────────
-  const tbody = document.getElementById('squad-tbody');
-  const sortedPlayers = [...players].sort((a, b) => {
-    const order = { GK:0, DEF:1, MID:2, FWD:3 };
-    return (order[a.p]??4) - (order[b.p]??4) || b.r - a.r;
-  });
-
-  const posClass = { GK:'pos-gk', DEF:'pos-def', MID:'pos-mid', FWD:'pos-fwd' };
-
-  tbody.innerHTML = sortedPlayers.map((p, i) => {
-    const isGK = p.p === 'GK';
-    const ratingPct = Math.max(0, Math.min(100, (p.r - 65) / 30 * 100));
-    return `
-      <tr>
-        <td style="color:var(--muted);font-size:.75rem;">${i+1}</td>
-        <td style="font-weight:600;">${p.n}</td>
-        <td><span class="pos-badge ${posClass[p.p]||'pos-mid'}">${p.p}</span></td>
-        <td>${p.ag}</td>
-        <td style="color:var(--muted);font-size:.8rem;">${p.cl}</td>
-        <td>${isGK ? (p.sv || '–') : (p.g ?? '–')}</td>
-        <td>${isGK ? '–' : (p.as ?? '–')}</td>
-        <td>${p.ca}</td>
-        <td>
-          <div class="rating-bar">
-            <span class="rating-val">${p.r}</span>
-            <div class="rating-pip"><div class="rating-pip-fill" style="width:${ratingPct}%"></div></div>
-          </div>
-        </td>
-      </tr>`;
+  // Squad table
+  const sorted=[...players].sort((a,b)=>{const o={GK:0,DEF:1,MID:2,FWD:3};return(o[a.p]??4)-(o[b.p]??4)||b.r-a.r});
+  document.getElementById('sq-tbody').innerHTML=sorted.map((pl,i)=>{
+    const isGK=pl.p==='GK';
+    const pct=Math.max(0,Math.min(100,(pl.r-65)/30*100));
+    return`<tr>
+      <td class="row-num">${i+1}</td>
+      <td style="font-weight:700">${pl.n}</td>
+      <td><span class="pos-badge ${pl.p}">${pl.p}</span></td>
+      <td>${pl.ag}</td>
+      <td style="color:var(--muted);font-size:.75rem">${pl.cl}</td>
+      <td>${isGK?(pl.sv||'–'):(pl.g??'–')}</td>
+      <td>${isGK?'–':(pl.as??'–')}</td>
+      <td>${pl.ca}</td>
+      <td><div class="r-bar"><span class="r-val">${pl.r}</span><div class="r-track"><div class="r-fill" style="width:${pct}%"></div></div></div></td>
+    </tr>`;
   }).join('');
 
-  // Update column headers for GK stat
-  document.getElementById('stat1-head').textContent = 'Goals/Saves';
-
-  // ── OTHER TEAMS IN GROUP ──────────────────────────────
-  const groupTeamIds = [...new Set(
-    MATCHES
-      .filter(m => m.grp === team.group)
-      .flatMap(m => [m.home, m.away])
-  )].filter(id => id !== tid && TEAMS[id]);
-
-  document.getElementById('group-teammates').innerHTML = groupTeamIds.map(id => {
-    const t = TEAMS[id];
-    const s = getSquadScore(PLAYERS[id] || []);
-    return `<a href="team.html?team=${id}"
-               style="background:var(--card);border:1px solid var(--border);border-radius:10px;
-                      padding:0.8rem 1.2rem;display:flex;align-items:center;gap:0.7rem;
-                      color:var(--text);text-decoration:none;transition:border-color .2s;"
-               onmouseover="this.style.borderColor='var(--gold)'"
-               onmouseout="this.style.borderColor='var(--border)'">
-      <span style="font-size:2rem;">${t.flag}</span>
-      <div>
-        <div style="font-weight:700;font-size:.9rem;">${t.name}</div>
-        <div style="font-size:.7rem;color:var(--muted);">Rank #${t.fifa_rank} &nbsp;·&nbsp; Squad: <strong style="color:var(--gold);">${s}/100</strong></div>
+  // Group teammates
+  const allIds=[...new Set(MATCHES.filter(m=>m.grp===T.group).flatMap(m=>[m.home,m.away]))].filter(id=>id!==tid&&TEAMS[id]);
+  document.getElementById('teammates').innerHTML=allIds.map(id=>{
+    const t=TEAMS[id];
+    const s=getSquadScore(PLAYERS[id]||[]);
+    return`<a href="team.html?team=${id}" class="teammate-card">
+      <div class="tm-flag">${t.flag}</div>
+      <div><div class="tm-name">${t.name}</div>
+        <div class="tm-sub">Rank #${t.fifa_rank} · Score <strong>${s}/100</strong></div>
       </div>
     </a>`;
   }).join('');
-
 })();
 </script>
 </body>
