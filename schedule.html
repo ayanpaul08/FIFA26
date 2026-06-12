@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Match Schedule — FIFA World Cup 2026</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="nav">
+  <span class="nav-brand"><a href="index.html" style="color:inherit;text-decoration:none;">WC<span>26</span></a></span>
+  <div class="nav-links">
+    <a href="index.html">Home</a>
+    <a href="schedule.html" class="active">Schedule</a>
+  </div>
+</nav>
+
+<div class="hero" style="padding:2rem 1.5rem 1.5rem;">
+  <div class="hero-eyebrow">All Times in IST (UTC+5:30)</div>
+  <h1 class="hero-title">Match <span class="hl">Schedule</span></h1>
+  <p class="hero-sub">104 matches across 16 venues in the USA, Canada &amp; Mexico</p>
+</div>
+
+<div class="page-wrap">
+
+  <!-- Filter bar -->
+  <div class="filter-bar" style="margin-top:1.5rem;">
+    <input type="text" id="search-box" placeholder="Search team..." oninput="filterSchedule()">
+    <div id="group-filter-btns" style="display:flex;gap:0.4rem;flex-wrap:wrap;"></div>
+    <button class="group-filter-btn active" onclick="clearGroupFilter(this)">ALL</button>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('group', this)">Group Stage</button>
+    <button class="tab-btn" onclick="switchTab('knockout', this)">Knockout Stage</button>
+  </div>
+
+  <!-- GROUP STAGE TAB -->
+  <div class="tab-pane active" id="tab-group">
+    <div id="group-schedule"></div>
+  </div>
+
+  <!-- KNOCKOUT TAB -->
+  <div class="tab-pane" id="tab-knockout">
+    <div id="knockout-schedule"></div>
+  </div>
+
+</div>
+
+<footer class="footer">
+  <p>All kickoff times shown in Indian Standard Time (IST = UTC + 5:30)</p>
+  <p style="margin-top:.3rem;"><a href="index.html">← Back to Home</a></p>
+</footer>
+
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+<script>
+(function(){
+
+  // ── Helpers ─────────────────────────────────────────
+  function sch(m) {
+    const isGroup = ['A','B','C','D','E','F','G','H','I','J','K','L'].includes(m.grp);
+    const home = isGroup ? TEAMS[m.home] : null;
+    const away = isGroup ? TEAMS[m.away] : null;
+    const isFT  = m.st === 'FT';
+    const isNS  = m.st === 'NS';
+    const isLive = m.st === 'LIVE';
+
+    const teamsHtml = isGroup
+      ? `<div class="sch-team">${home.flag} <a href="team.html?team=${m.home}">${home.name}</a></div>
+         <span class="sch-vs">vs</span>
+         <div class="sch-team">${away.flag} <a href="team.html?team=${m.away}">${away.name}</a></div>`
+      : `<span style="color:var(--muted);font-size:0.82rem;">${m.label || 'TBD vs TBD'}</span>`;
+
+    const resultHtml = isFT
+      ? `<div class="sch-score">${m.hs} – ${m.as}<br><small style="font-family:Inter;font-size:.6rem;color:var(--green);">FT</small></div>`
+      : isLive
+      ? `<div class="sch-score">${m.hs||0} – ${m.as||0}<br><small style="font-family:Inter;font-size:.6rem;color:var(--red);">LIVE</small></div>`
+      : `<div class="sch-score"><span class="ns">—</span></div>`;
+
+    const istTime = formatISTTime(m.utc);
+    const istDate = toIST(m.utc).toLocaleDateString('en-IN',{day:'numeric',month:'short',timeZone:'UTC'});
+
+    return `<div class="schedule-row"
+                 data-home="${m.home||''}" data-away="${m.away||''}"
+                 data-group="${m.grp}"
+                 data-label="${(m.label||'').toLowerCase()}">
+      <div class="sch-time">${istTime}<small>${istDate}</small></div>
+      <div class="sch-teams">${teamsHtml}</div>
+      ${resultHtml}
+    </div>`;
+  }
+
+  // ── GROUP STAGE: organised by IST date ───────────────
+  const groupMatches = MATCHES.filter(m =>
+    ['A','B','C','D','E','F','G','H','I','J','K','L'].includes(m.grp)
+  );
+
+  // Group by IST date
+  const byDate = {};
+  const todayIST = toIST(new Date().toISOString())
+    .toLocaleDateString('en-IN',{timeZone:'UTC',day:'numeric',month:'short',year:'numeric'});
+
+  groupMatches.forEach(m => {
+    const d = toIST(m.utc).toLocaleDateString('en-IN',
+      {weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'UTC'});
+    if (!byDate[d]) byDate[d] = [];
+    byDate[d].push(m);
+  });
+
+  const groupDiv = document.getElementById('group-schedule');
+  let groupHtml = '';
+  for (const [date, matches] of Object.entries(byDate)) {
+    const shortDate = toIST(matches[0].utc).toLocaleDateString('en-IN',
+      {day:'numeric', month:'short', timeZone:'UTC'});
+    const isToday = shortDate === todayIST.split(' ').slice(0,2).join(' ');
+    const todayTag = isToday ? '<span class="today-tag">TODAY</span>' : '';
+    groupHtml += `
+      <div class="day-block">
+        <div class="day-header">${date} ${todayTag}</div>
+        ${matches.map(sch).join('')}
+      </div>`;
+  }
+  groupDiv.innerHTML = groupHtml;
+
+  // ── GROUP FILTER BUTTONS ─────────────────────────────
+  const groups = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+  const btnContainer = document.getElementById('group-filter-btns');
+  let activeGroup = null;
+
+  btnContainer.innerHTML = groups.map(g =>
+    `<button class="group-filter-btn" onclick="setGroupFilter('${g}',this)">GRP ${g}</button>`
+  ).join('');
+
+  window.setGroupFilter = function(g, btn) {
+    activeGroup = g;
+    document.querySelectorAll('.group-filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    filterSchedule();
+  };
+
+  window.clearGroupFilter = function(btn) {
+    activeGroup = null;
+    document.querySelectorAll('.group-filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    filterSchedule();
+  };
+
+  window.filterSchedule = function() {
+    const q = (document.getElementById('search-box').value || '').toLowerCase();
+    document.querySelectorAll('.schedule-row').forEach(row => {
+      const home  = (row.dataset.home  || '').replace(/_/g,' ');
+      const away  = (row.dataset.away  || '').replace(/_/g,' ');
+      const label = row.dataset.label  || '';
+      const grp   = row.dataset.group  || '';
+      const matchesSearch = !q || home.includes(q) || away.includes(q) || label.includes(q);
+      const matchesGroup  = !activeGroup || grp === activeGroup;
+      row.style.display = (matchesSearch && matchesGroup) ? '' : 'none';
+    });
+    // Hide empty day-blocks
+    document.querySelectorAll('.day-block').forEach(block => {
+      const visible = [...block.querySelectorAll('.schedule-row')]
+        .some(r => r.style.display !== 'none');
+      block.style.display = visible ? '' : 'none';
+    });
+  };
+
+  // ── KNOCKOUT SCHEDULE ────────────────────────────────
+  const koStages = [
+    { key:'R32', label:'Round of 32', color:'var(--accent)' },
+    { key:'R16', label:'Round of 16', color:'var(--green)' },
+    { key:'QF',  label:'Quarter-Finals', color:'var(--gold)' },
+    { key:'SF',  label:'Semi-Finals', color:'#FF8C00' },
+    { key:'3P',  label:'Third Place Play-off', color:'var(--muted)' },
+    { key:'FIN', label:'🏆 THE FINAL', color:'var(--gold)' },
+  ];
+
+  const koDiv = document.getElementById('knockout-schedule');
+  let koHtml = '';
+
+  koStages.forEach(({ key, label, color }) => {
+    const stageMatches = MATCHES.filter(m => m.grp === key);
+    if (!stageMatches.length) return;
+    koHtml += `<div class="ko-stage-header" style="color:${color};">${label}</div>`;
+    stageMatches.forEach(m => {
+      const ist = formatIST(m.utc);
+      koHtml += `
+        <div class="ko-row">
+          <div class="ko-label">${m.label || 'TBD vs TBD'}</div>
+          <div class="ko-time">🕐 ${ist}</div>
+          <div class="ko-tbd">📍 ${m.venue}</div>
+        </div>`;
+    });
+  });
+  koDiv.innerHTML = koHtml;
+
+  // ── TAB SWITCHER ─────────────────────────────────────
+  window.switchTab = function(name, btn) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + name).classList.add('active');
+  };
+
+})();
+</script>
+</body>
+</html>
