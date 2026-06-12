@@ -99,7 +99,7 @@ a{text-decoration:none;color:inherit}
 .st tr:last-child td{border-bottom:none}
 .st tr.top td:nth-child(2){border-left:3px solid var(--green);padding-left:8px}
 .st tr.bub td:nth-child(2){border-left:3px solid var(--gold);padding-left:8px}
-.pts{font-weight:800;color:#fff}
+.pts{font-weight:400;color:var(--text)}
 .gd.p{color:var(--green)}.gd.n{color:var(--red)}
 .tc{display:flex;align-items:center;gap:.5rem}
 .tc .f{font-size:1.05rem}
@@ -114,7 +114,21 @@ a{text-decoration:none;color:inherit}
 .spin{display:inline-block;width:10px;height:10px;border:2px solid rgba(255,215,0,.2);border-top-color:var(--gold);border-radius:50%;animation:rot .6s linear infinite;vertical-align:middle}
 @keyframes rot{to{transform:rotate(360deg)}}
 
-@media(max-width:600px){.mgrid,.sgrid{grid-template-columns:1fr}}
+@media(max-width:600px){
+  .mgrid,.sgrid{grid-template-columns:1fr}
+  .hero-year{font-size:clamp(3.5rem,22vw,7rem)}
+  .nav{padding:0 .8rem}
+  .nav-links a{padding:.35rem .6rem;font-size:.68rem;letter-spacing:0}
+  .wrap{padding:1.5rem .8rem}
+  .mc-flag{font-size:2.4rem}
+  .mc-score{font-size:2.4rem}
+  .mc-body{padding:.9rem .8rem .8rem}
+  #live-bar{padding:.35rem .8rem;font-size:.65rem}
+}
+@media(max-width:380px){
+  .hero-year{display:none}
+  .nav-logo{font-size:1.3rem}
+}
 </style>
 </head>
 <body>
