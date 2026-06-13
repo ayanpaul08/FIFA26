@@ -183,6 +183,41 @@ a{text-decoration:none;color:inherit}
 .spin{display:inline-block;width:10px;height:10px;border:2px solid rgba(255,215,0,.2);border-top-color:var(--gold);border-radius:50%;animation:rot .6s linear infinite;vertical-align:middle}
 @keyframes rot{to{transform:rotate(360deg)}}
 
+/* ── NS CARD PREVIEW BACK ────────────────────────── */
+.ns-back-header{padding-bottom:.45rem;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:.55rem}
+.ns-back-title{font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;color:var(--gold)}
+.ns-section-lbl{font-size:.55rem;font-weight:800;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;margin-bottom:.3rem;display:flex;align-items:center;gap:.4rem}
+.ns-disclaimer{color:rgba(255,255,255,.2);font-weight:400;letter-spacing:.3px;font-size:.52rem}
+.wp-bars{display:flex;flex-direction:column;gap:.26rem;margin-bottom:.55rem}
+.wp-row{display:flex;align-items:center;gap:.45rem}
+.wp-label{font-size:.62rem;font-weight:700;color:rgba(255,255,255,.78);min-width:82px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wp-track{flex:1;height:4px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden}
+.wp-fill{height:100%;border-radius:3px}
+.wp-pct{font-size:.62rem;font-weight:800;color:rgba(255,255,255,.65);min-width:26px;text-align:right}
+.pw-list{display:flex;flex-direction:column;gap:.22rem}
+.pw-row{display:flex;align-items:center;gap:.38rem;font-size:.66rem}
+.pw-fl{font-size:.85rem;flex-shrink:0}
+.pw-nm{color:rgba(255,255,255,.88);font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pw-pos{font-size:.5rem;font-weight:900;padding:.08rem .3rem;border-radius:3px;flex-shrink:0;text-transform:uppercase}
+.pw-pos.GK{background:rgba(255,59,78,.15);color:var(--red)}
+.pw-pos.DEF{background:rgba(0,180,255,.12);color:var(--blue)}
+.pw-pos.MID{background:rgba(0,230,118,.12);color:var(--green)}
+.pw-pos.FWD{background:rgba(255,215,0,.12);color:var(--gold)}
+.pw-rt{font-family:'Orbitron',monospace;font-size:.58rem;color:var(--gold);font-weight:700;flex-shrink:0}
+
+/* ── NEWS SECTION ────────────────────────────────── */
+.news-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem}
+.news-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column;text-decoration:none;color:inherit;transition:transform .2s,border-color .2s}
+.news-card:hover{transform:translateY(-3px);border-color:rgba(255,215,0,.3)}
+.news-thumb{height:118px;background-size:cover;background-position:center;background-color:var(--surface);display:flex;align-items:center;justify-content:center;font-size:2.5rem;color:rgba(255,255,255,.08);flex-shrink:0}
+.news-body{padding:.85rem 1rem;display:flex;flex-direction:column;gap:.32rem;flex:1}
+.news-meta{font-size:.62rem;font-weight:700;letter-spacing:.5px;text-transform:uppercase;display:flex;align-items:center;gap:.4rem}
+.news-src{color:var(--gold)}.news-ago{color:var(--muted)}
+.news-title{font-size:.82rem;font-weight:700;color:var(--text);line-height:1.45}
+.news-excerpt{font-size:.72rem;color:var(--muted);line-height:1.6;flex:1;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.news-read{font-size:.7rem;font-weight:700;color:var(--gold);margin-top:.1rem}
+.news-empty{text-align:center;padding:2.5rem 1rem;color:var(--muted);font-size:.82rem;background:var(--card);border:1px solid var(--border);border-radius:var(--r)}
+
 @media(max-width:600px){
   .mgrid,.sgrid{grid-template-columns:1fr}
   .hero-year{font-size:clamp(3.5rem,22vw,7rem)}
@@ -267,6 +302,11 @@ a{text-decoration:none;color:inherit}
   <div style="margin-top:2.5rem">
     <div class="sh">GROUP STANDINGS</div>
     <div class="sgrid" id="standings-grid"></div>
+  </div>
+
+  <div style="margin-top:2.5rem" id="news-wrap">
+    <div class="sh">LATEST FOOTBALL NEWS</div>
+    <div id="news-grid"><div class="news-empty"><span class="spin"></span> &nbsp;Fetching headlines…</div></div>
   </div>
 </div>
 
@@ -600,6 +640,69 @@ function buildCardBack(m,h,a,c1,c2){
   return `<div class="mc-clip mc-clip-back" style="background:${backBg}">${inner}</div>`;
 }
 
+// ── WIN PROBABILITY (FIFA ranking based) ──────────
+function calcWinProb(rankH, rankA){
+  const eloH=Math.max(600, 1800-rankH*5);
+  const eloA=Math.max(600, 1800-rankA*5);
+  const diff=eloH-eloA;
+  const rawHome=1/(1+Math.pow(10,-diff/400));
+  // Draw: peaks at ~28% when evenly matched, ~18% when heavily mismatched
+  const spread=Math.abs(rawHome-0.5);
+  const pDraw=Math.max(0.17, 0.28-spread*0.22);
+  const pHome=rawHome*(1-pDraw);
+  const pAway=(1-rawHome)*(1-pDraw);
+  // Normalise so they always sum to 100
+  const h=Math.max(4, Math.round(pHome*100));
+  const d=Math.max(10, Math.round(pDraw*100));
+  const a=Math.max(4, 100-h-d);
+  return {home:h, draw:d, away:a};
+}
+
+// ── NS CARD BACK: win prob + players to watch ─────
+function buildNSCardBack(m,h,a,c1,c2){
+  const backBg=`linear-gradient(135deg,${c1}16 0%,${c2}16 100%),var(--card)`;
+  const prob=calcWinProb(TEAMS[m.home].fifa_rank, TEAMS[m.away].fifa_rank);
+
+  // Players to watch: top 2 per side by EA rating, prefer outfield
+  const pick=(tid)=>(PLAYERS[tid]||[])
+    .filter(p=>p.p!=='GK')
+    .sort((x,y)=>y.r-x.r)
+    .slice(0,2);
+  const hPlayers=pick(m.home);
+  const aPlayers=pick(m.away);
+
+  const bar=(label,pct,color)=>`<div class="wp-row">
+    <span class="wp-label">${label}</span>
+    <div class="wp-track"><div class="wp-fill" style="width:${pct}%;background:${color}"></div></div>
+    <span class="wp-pct">${pct}%</span>
+  </div>`;
+
+  const prow=(p,flag)=>`<div class="pw-row">
+    <span class="pw-fl">${flag}</span>
+    <span class="pw-nm">${p.n}</span>
+    <span class="pw-pos ${p.p}">${p.p}</span>
+    <span class="pw-rt">${p.r}</span>
+  </div>`;
+
+  return `<div class="mc-clip mc-clip-back" style="background:${backBg}">
+    <div class="ns-back-header">
+      <span class="ns-back-title">GROUP ${m.grp} · MATCH PREVIEW</span>
+    </div>
+    <div class="ns-section-lbl">WIN PROBABILITY <span class="ns-disclaimer">based on FIFA rankings</span></div>
+    <div class="wp-bars">
+      ${bar(h.flag+' '+h.name, prob.home, c1||'var(--green)')}
+      ${bar('⚖️ Draw', prob.draw, 'var(--muted)')}
+      ${bar(a.flag+' '+a.name, prob.away, c2||'var(--blue)')}
+    </div>
+    <div class="ns-section-lbl">PLAYERS TO WATCH</div>
+    <div class="pw-list">
+      ${hPlayers.map(p=>prow(p,h.flag)).join('')}
+      ${aPlayers.map(p=>prow(p,a.flag)).join('')}
+    </div>
+    <div class="mb-flip-back">↻ tap to flip back</div>
+  </div>`;
+}
+
 function buildCard(m){
   const h=TEAMS[m.home],a=TEAMS[m.away];
   const c1=h.colors[0],c2=a.colors[0];
@@ -614,21 +717,43 @@ function buildCard(m){
     </div>`;
   }
 
-  // Non-FT card (NS / LIVE) — no flip
-  const isNS=m.st==='NS',isLive=m.st==='LIVE';
-  const stTxt=isLive?(m.clock?m.clock+' 🔴':'🔴 Live'):fmtTime(m.utc)+' IST';
-  const stCls=isLive?'live':'';
-  const cdHtml=isNS?`<div class="countdown" id="cd-${m.id}"></div>`:'';
+  if(m.st==='NS'){
+    const frontHtml=`<div class="mc-clip">
+      <div class="mc-bg" style="background:${grad};opacity:.55"></div>
+      <div class="mc-dark"></div>
+      <div class="mc-body">
+        <div class="mc-top">
+          <span class="mc-grp">GROUP ${m.grp}</span>
+          <span class="mc-st">${fmtTime(m.utc)} IST</span>
+        </div>
+        <div class="mc-teams">
+          <div class="mc-team"><div class="mc-flag">${h.flag}</div><div class="mc-nm"><a href="team.html?team=${m.home}" onclick="event.stopPropagation()">${h.name}</a></div></div>
+          <div class="mc-mid"><div class="mc-vs">VS</div><div class="countdown" id="cd-${m.id}"></div></div>
+          <div class="mc-team"><div class="mc-flag">${a.flag}</div><div class="mc-nm"><a href="team.html?team=${m.away}" onclick="event.stopPropagation()">${a.name}</a></div></div>
+        </div>
+        <div class="mc-foot"><span class="time">${fmtIST(m.utc)}</span><span>📍 ${m.venue.split(',')[0]}</span></div>
+      </div>
+      <div class="flip-hint">↻ Preview</div>
+    </div>`;
+    return `<div class="mc-flip" style="height:272px;" onclick="flipCard(this)">
+      <div class="mc-inner">
+        <div class="mc-face">${frontHtml}</div>
+        <div class="mc-face mc-back">${buildNSCardBack(m,h,a,c1,c2)}</div>
+      </div>
+    </div>`;
+  }
+
+  // LIVE — plain card, no flip
   return `<div class="mc" style="--mc-grad:${grad}">
     <div class="mc-bg"></div><div class="mc-dark"></div>
     <div class="mc-body">
       <div class="mc-top">
         <span class="mc-grp">GROUP ${m.grp}</span>
-        <span class="mc-st ${stCls}">${stTxt}</span>
+        <span class="mc-st live">${m.clock?m.clock+' 🔴':'🔴 Live'}</span>
       </div>
       <div class="mc-teams">
         <div class="mc-team"><div class="mc-flag">${h.flag}</div><div class="mc-nm"><a href="team.html?team=${m.home}">${h.name}</a></div></div>
-        <div class="mc-mid"><div class="mc-vs">VS</div>${cdHtml}</div>
+        <div class="mc-mid"><div class="mc-score">${m.hs}<span class="s"> – </span>${m.as}</div></div>
         <div class="mc-team"><div class="mc-flag">${a.flag}</div><div class="mc-nm"><a href="team.html?team=${m.away}">${a.name}</a></div></div>
       </div>
       <div class="mc-foot"><span class="time">${fmtIST(m.utc)}</span><span>📍 ${m.venue.split(',')[0]}</span></div>
@@ -805,9 +930,85 @@ async function poll(){
   pollTimer=setTimeout(poll,ms);
 }
 
+// ══════════════════════════════════════════════════
+//  FOOTBALL NEWS  — RSS via rss2json.com (no key)
+// ══════════════════════════════════════════════════
+const NEWS_FEEDS=[
+  {url:'https://feeds.bbci.co.uk/sport/football/rss.xml', src:'BBC Sport'},
+  {url:'https://www.theguardian.com/football/rss',         src:'The Guardian'},
+];
+const RSS2JSON='https://api.rss2json.com/v1/api.json';
+
+function timeAgo(date){
+  const m=Math.floor((Date.now()-date.getTime())/60000);
+  if(m<60) return m+'m ago';
+  const h=Math.floor(m/60);
+  if(h<24) return h+'h ago';
+  return Math.floor(h/24)+'d ago';
+}
+
+function stripHtml(str){
+  return (str||'').replace(/<[^>]*>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&nbsp;/g,' ').trim();
+}
+
+async function fetchNewsItems(){
+  const all=[];
+  await Promise.allSettled(NEWS_FEEDS.map(async({url,src})=>{
+    try{
+      const r=await fetch(`${RSS2JSON}?rss_url=${encodeURIComponent(url)}&count=8`);
+      const d=await r.json();
+      if(d.status!=='ok') return;
+      (d.items||[]).forEach(item=>{
+        const thumb=item.thumbnail||item.enclosure?.link||'';
+        all.push({
+          title: stripHtml(item.title||''),
+          link:  item.link||'#',
+          date:  new Date(item.pubDate||0),
+          excerpt: stripHtml(item.description||item.content||'').slice(0,130),
+          thumb:  thumb.startsWith('http')?thumb:'',
+          src,
+        });
+      });
+    }catch(e){ /* feed unavailable — skip silently */ }
+  }));
+  return all.sort((a,b)=>b.date-a.date).slice(0,9);
+}
+
+function renderNews(items){
+  const grid=document.getElementById('news-grid');
+  if(!grid) return;
+  if(!items.length){
+    grid.innerHTML='<div class="news-empty">No headlines available right now. Try again soon.</div>';
+    return;
+  }
+  grid.innerHTML=items.map(n=>`
+    <a class="news-card" href="${n.link}" target="_blank" rel="noopener">
+      <div class="news-thumb" ${n.thumb?`style="background-image:url('${n.thumb}')"`:''}>
+        ${n.thumb?'':'⚽'}
+      </div>
+      <div class="news-body">
+        <div class="news-meta">
+          <span class="news-src">${n.src}</span>
+          <span class="news-ago">${timeAgo(n.date)}</span>
+        </div>
+        <div class="news-title">${n.title}</div>
+        <div class="news-excerpt">${n.excerpt}</div>
+        <div class="news-read">Read more →</div>
+      </div>
+    </a>`).join('');
+}
+
+async function initNews(){
+  const items=await fetchNewsItems();
+  renderNews(items);
+  // Refresh every 20 minutes
+  setInterval(async()=>renderNews(await fetchNewsItems()), 20*60*1000);
+}
+
 // ── KICK IT OFF ───────────────────────────────────
-renderAll();      // render immediately with static data
-poll();           // then hit ESPN straight away
+renderAll();
+poll();
+initNews();
 </script>
 </body>
 </html>
