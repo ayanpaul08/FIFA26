@@ -111,37 +111,24 @@ a{text-decoration:none;color:inherit}
 .footer a{color:var(--muted)}.footer a:hover{color:var(--gold)}
 
 /* ── FLIP CARD ─────────────────────────────────── */
-.mc-flip{
-  cursor:pointer;perspective:1200px;position:relative;
-}
+.mc-flip{cursor:pointer;perspective:1200px;position:relative;}
 .mc-flip .mc-inner{
   position:relative;width:100%;height:100%;
-  transition:transform .55s cubic-bezier(.4,0,.2,1);
+  transition:transform .5s ease;
   transform-style:preserve-3d;
 }
-.mc-flip.flipped .mc-inner{transform:rotateY(180deg)}
-.mc-face{
-  /* backface-visibility MUST live on an element with NO overflow:hidden or border-radius */
-  position:absolute;inset:0;
-  backface-visibility:hidden;
-  -webkit-backface-visibility:hidden;
-}
-.mc-back{transform:rotateY(180deg);}
-/* All visual clipping lives in an inner wrapper — separate from backface-visibility */
+/* No backface-visibility — JS toggles visibility at animation midpoint instead */
+.mc-face{position:absolute;inset:0;}
+.mc-back{transform:rotateY(180deg);visibility:hidden;}
 .mc-clip{
-  position:absolute;inset:0;
-  overflow:hidden;border-radius:var(--r);
-  border:1px solid rgba(255,255,255,.06);
-  box-shadow:0 8px 40px rgba(0,0,0,.5);
+  position:absolute;inset:0;overflow:hidden;border-radius:var(--r);
+  border:1px solid rgba(255,255,255,.06);box-shadow:0 8px 40px rgba(0,0,0,.5);
 }
-.mc-clip-back{
-  display:flex;flex-direction:column;padding:1rem 1.1rem;
-}
+.mc-clip-back{display:flex;flex-direction:column;padding:1rem 1.1rem;}
 .flip-hint{
-  position:absolute;bottom:.55rem;right:.8rem;
-  font-size:.56rem;font-weight:700;letter-spacing:.8px;
-  color:rgba(255,255,255,.22);text-transform:uppercase;
-  pointer-events:none;
+  position:absolute;bottom:.55rem;right:.8rem;font-size:.56rem;
+  font-weight:700;letter-spacing:.8px;color:rgba(255,255,255,.22);
+  text-transform:uppercase;pointer-events:none;
 }
 /* Back face content */
 .mb-header{
@@ -493,10 +480,41 @@ window.toggleOlder=function(count,days){
 };
 
 // Global flip toggle
-window.flipCard=function(el,e){
-  if(e){e.stopPropagation();}
+// Store pending flip timers to handle rapid clicks cleanly
+const _flipTimers={};
+
+window.flipCard=function(el){
   const card=el.closest?el.closest('.mc-flip'):el;
-  if(card) card.classList.toggle('flipped');
+  if(!card) return;
+
+  const inner=card.querySelector('.mc-inner');
+  const front=card.querySelector('.mc-face:not(.mc-back)');
+  const back =card.querySelector('.mc-back');
+  if(!inner||!front||!back) return;
+
+  const id=card.dataset.fid||(card.dataset.fid=Math.random().toString(36).slice(2));
+  clearTimeout(_flipTimers[id]);
+
+  const goingToBack=!card.classList.contains('flipped');
+  card.classList.toggle('flipped');
+
+  if(goingToBack){
+    // Rotate inner to 180° — back face spins into view
+    inner.style.transform='rotateY(180deg)';
+    // At midpoint: hide front (it's now edge-on), show back
+    _flipTimers[id]=setTimeout(()=>{
+      front.style.visibility='hidden';
+      back.style.visibility='visible';
+    },250);
+  } else {
+    // Rotate back to 0° — front face spins into view
+    inner.style.transform='rotateY(0deg)';
+    // Show front immediately, hide back at midpoint
+    front.style.visibility='visible';
+    _flipTimers[id]=setTimeout(()=>{
+      back.style.visibility='hidden';
+    },250);
+  }
 };
 
 function buildCardFront(m,h,a,c1,c2){
