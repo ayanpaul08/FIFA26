@@ -931,58 +931,89 @@ async function poll(){
 }
 
 // ══════════════════════════════════════════════════
-//  FOOTBALL NEWS  — RSS via rss2json.com (no key)
+//  FOOTBALL NEWS — via allorigins.win CORS proxy
+//  Parses RSS XML directly in browser — no API key
 // ══════════════════════════════════════════════════
 const NEWS_FEEDS=[
   {url:'https://feeds.bbci.co.uk/sport/football/rss.xml', src:'BBC Sport'},
   {url:'https://www.theguardian.com/football/rss',         src:'The Guardian'},
 ];
-const RSS2JSON='https://api.rss2json.com/v1/api.json';
 
 function timeAgo(date){
   const m=Math.floor((Date.now()-date.getTime())/60000);
-  if(m<60) return m+'m ago';
+  if(m<2)return'just now';
+  if(m<60)return m+'m ago';
   const h=Math.floor(m/60);
-  if(h<24) return h+'h ago';
+  if(h<24)return h+'h ago';
   return Math.floor(h/24)+'d ago';
 }
-
-function stripHtml(str){
-  return (str||'').replace(/<[^>]*>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&nbsp;/g,' ').trim();
+function stripHtml(s){
+  return(s||'').replace(/<!\[CDATA\[|\]\]>/g,'').replace(/<[^>]*>/g,'')
+    .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>')
+    .replace(/&nbsp;/g,' ').replace(/&#\d+;/g,'').trim();
 }
 
-async function fetchNewsItems(){
-  const all=[];
-  await Promise.allSettled(NEWS_FEEDS.map(async({url,src})=>{
-    try{
-      const r=await fetch(`${RSS2JSON}?rss_url=${encodeURIComponent(url)}&count=8`);
-      const d=await r.json();
-      if(d.status!=='ok') return;
-      (d.items||[]).forEach(item=>{
-        const thumb=item.thumbnail||item.enclosure?.link||'';
-        all.push({
-          title: stripHtml(item.title||''),
-          link:  item.link||'#',
-          date:  new Date(item.pubDate||0),
-          excerpt: stripHtml(item.description||item.content||'').slice(0,130),
-          thumb:  thumb.startsWith('http')?thumb:'',
-          src,
-        });
-      });
-    }catch(e){ /* feed unavailable — skip silently */ }
-  }));
-  return all.sort((a,b)=>b.date-a.date).slice(0,9);
+async function fetchFeed({url,src}){
+  // allorigins.win fetches any URL server-side and returns it to the browser
+  const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(url)}&timestamp=${Date.now()}`;
+  const ctrl=new AbortController();
+  const t=setTimeout(()=>ctrl.abort(),9000);
+  try{
+    const r=await fetch(proxy,{signal:ctrl.signal});
+    clearTimeout(t);
+    const data=await r.json();
+    if(!data.contents) return [];
+
+    const xml=new DOMParser().parseFromString(data.contents,'text/xml');
+    const items=Array.from(xml.querySelectorAll('item')).slice(0,8);
+
+    return items.map(item=>{
+      const get=tag=>{
+        // getElementsByTagName is more reliable than querySelector for RSS
+        const el=item.getElementsByTagName(tag)[0];
+        return el?.textContent?.trim()||'';
+      };
+      const enc=item.getElementsByTagName('enclosure')[0];
+      // media:thumbnail (Yahoo Media RSS namespace)
+      const media=item.getElementsByTagNameNS('http://search.yahoo.com/mrss/','thumbnail')[0];
+      const thumb=enc?.getAttribute('url')||media?.getAttribute('url')||'';
+
+      return{
+        title:  stripHtml(get('title')),
+        link:   get('link')||get('guid')||'#',
+        date:   new Date(get('pubDate')),
+        excerpt:stripHtml(get('description')).slice(0,140),
+        thumb:  thumb.startsWith('http')?thumb:'',
+        src,
+      };
+    });
+  }catch(e){
+    clearTimeout(t);
+    console.warn('[News] Failed to fetch',src,e.message);
+    return [];
+  }
+}
+
+async function fetchAllNews(){
+  const results=await Promise.allSettled(NEWS_FEEDS.map(fetchFeed));
+  const all=results.flatMap(r=>r.status==='fulfilled'?r.value:[]);
+  // Deduplicate by title similarity, sort newest first
+  const seen=new Set();
+  return all
+    .filter(n=>{ const k=n.title.slice(0,40); if(seen.has(k))return false; seen.add(k);return true; })
+    .sort((a,b)=>b.date-a.date)
+    .slice(0,9);
 }
 
 function renderNews(items){
   const grid=document.getElementById('news-grid');
-  if(!grid) return;
+  if(!grid)return;
   if(!items.length){
-    grid.innerHTML='<div class="news-empty">No headlines available right now. Try again soon.</div>';
+    grid.innerHTML='<div class="news-empty">Headlines unavailable — check back soon</div>';
     return;
   }
   grid.innerHTML=items.map(n=>`
-    <a class="news-card" href="${n.link}" target="_blank" rel="noopener">
+    <a class="news-card" href="${n.link}" target="_blank" rel="noopener noreferrer">
       <div class="news-thumb" ${n.thumb?`style="background-image:url('${n.thumb}')"`:''}>
         ${n.thumb?'':'⚽'}
       </div>
@@ -999,10 +1030,16 @@ function renderNews(items){
 }
 
 async function initNews(){
-  const items=await fetchNewsItems();
+  // Show spinner while loading
+  const grid=document.getElementById('news-grid');
+  if(grid) grid.innerHTML='<div class="news-empty"><span class="spin"></span> &nbsp;Loading headlines…</div>';
+  const items=await fetchAllNews();
   renderNews(items);
-  // Refresh every 20 minutes
-  setInterval(async()=>renderNews(await fetchNewsItems()), 20*60*1000);
+  // Refresh every 15 minutes
+  setInterval(async()=>{
+    const fresh=await fetchAllNews();
+    if(fresh.length) renderNews(fresh);
+  }, 15*60*1000);
 }
 
 // ── KICK IT OFF ───────────────────────────────────
