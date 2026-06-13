@@ -111,7 +111,13 @@ a{text-decoration:none;color:inherit}
 .footer a{color:var(--muted)}.footer a:hover{color:var(--gold)}
 
 /* ── FLIP CARD ─────────────────────────────────── */
-.mc-flip{cursor:pointer;perspective:1200px;}
+.mc-flip{
+  cursor:pointer;
+  perspective:1200px;
+  border-radius:var(--r);
+  position:relative;
+  /* NO overflow:hidden here — it breaks backface-visibility in 3D context */
+}
 .mc-flip .mc-inner{
   position:relative;width:100%;height:100%;
   transition:transform .55s cubic-bezier(.4,0,.2,1);
@@ -122,11 +128,12 @@ a{text-decoration:none;color:inherit}
   position:absolute;inset:0;
   backface-visibility:hidden;-webkit-backface-visibility:hidden;
   border-radius:var(--r);overflow:hidden;
+  border:1px solid rgba(255,255,255,.06);
+  box-shadow:0 8px 40px rgba(0,0,0,.5);
 }
 .mc-back-face{
   transform:rotateY(180deg);
   display:flex;flex-direction:column;padding:1rem 1.1rem;
-  border:1px solid var(--border);
 }
 .flip-hint{
   position:absolute;bottom:.55rem;right:.8rem;
@@ -589,7 +596,7 @@ function buildCard(m){
   if(m.st==='FT'){
     // Flip card for completed matches
     const backBg=`linear-gradient(135deg,${c1}18 0%,${c2}18 100%),var(--card)`;
-    return `<div class="mc mc-flip" style="--mc-grad:${grad};height:248px;" onclick="flipCard(this)">
+    return `<div class="mc-flip" style="--mc-grad:${grad};height:248px;" onclick="flipCard(this)">
       <div class="mc-inner">
         <div class="mc-face" style="background:var(--card)">
           ${buildCardFront(m,h,a,c1,c2)}
