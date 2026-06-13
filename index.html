@@ -112,11 +112,7 @@ a{text-decoration:none;color:inherit}
 
 /* ── FLIP CARD ─────────────────────────────────── */
 .mc-flip{
-  cursor:pointer;
-  perspective:1200px;
-  border-radius:var(--r);
-  position:relative;
-  /* NO overflow:hidden here — it breaks backface-visibility in 3D context */
+  cursor:pointer;perspective:1200px;position:relative;
 }
 .mc-flip .mc-inner{
   position:relative;width:100%;height:100%;
@@ -125,14 +121,20 @@ a{text-decoration:none;color:inherit}
 }
 .mc-flip.flipped .mc-inner{transform:rotateY(180deg)}
 .mc-face{
+  /* backface-visibility MUST live on an element with NO overflow:hidden or border-radius */
   position:absolute;inset:0;
-  backface-visibility:hidden;-webkit-backface-visibility:hidden;
-  border-radius:var(--r);overflow:hidden;
+  backface-visibility:hidden;
+  -webkit-backface-visibility:hidden;
+}
+.mc-back{transform:rotateY(180deg);}
+/* All visual clipping lives in an inner wrapper — separate from backface-visibility */
+.mc-clip{
+  position:absolute;inset:0;
+  overflow:hidden;border-radius:var(--r);
   border:1px solid rgba(255,255,255,.06);
   box-shadow:0 8px 40px rgba(0,0,0,.5);
 }
-.mc-back-face{
-  transform:rotateY(180deg);
+.mc-clip-back{
   display:flex;flex-direction:column;padding:1rem 1.1rem;
 }
 .flip-hint{
@@ -505,8 +507,10 @@ function buildCardFront(m,h,a,c1,c2){
     ?`<div class="mc-score">${m.hs}<span class="s"> – </span>${m.as}</div>`
     :`<div class="mc-vs">VS</div>`;
   const cdHtml=isNS?`<div class="countdown" id="cd-${m.id}"></div>`:'';
-  return `
-    <div class="mc-bg"></div><div class="mc-dark"></div>
+  const grad=`linear-gradient(135deg,${c1} 0%,${c1} 40%,${c2} 60%,${c2} 100%)`;
+  return `<div class="mc-clip">
+    <div class="mc-bg" style="background:${grad};opacity:.55"></div>
+    <div class="mc-dark"></div>
     <div class="mc-body">
       <div class="mc-top">
         <span class="mc-grp">GROUP ${m.grp}</span>
@@ -525,26 +529,14 @@ function buildCardFront(m,h,a,c1,c2){
       </div>
       <div class="mc-foot"><span class="time">${fmtIST(m.utc)}</span><span>📍 ${m.venue.split(',')[0]}</span></div>
     </div>
-    ${m.st==='FT'?'<div class="flip-hint">↻ Scorers &amp; cards</div>':''}`;
-}
+    <div class="flip-hint">↻ Scorers &amp; cards</div>
+  </div>`;
 
 function buildCardBack(m,h,a,c1,c2){
   const sc=m.scorers||{home:[],away:[]};
   const cards=m.cards||[];
   const hasData=sc.home.length||sc.away.length||cards.length;
-
-  if(!hasData){
-    return `
-      <div class="mb-header">
-        <span class="mb-title">GROUP ${m.grp} · FULL TIME</span>
-        <span class="mb-score">${m.hs} – ${m.as}</span>
-      </div>
-      <div class="mb-no-data">
-        <div>Scorer data<br>not yet available</div>
-        <div style="font-size:.6rem;margin-top:.3rem;color:var(--muted)">Will appear after ESPN updates</div>
-      </div>
-      <div class="mb-flip-back">↻ tap to flip back</div>`;
-  }
+  const backBg=`linear-gradient(135deg,${c1}18 0%,${c2}18 100%),var(--card)`;
 
   function goalRow(s){
     return `<div class="mb-goal">
@@ -553,39 +545,40 @@ function buildCardBack(m,h,a,c1,c2){
     </div>`;
   }
 
-  const homeGoals=sc.home.length
-    ?sc.home.map(goalRow).join('')
-    :`<div class="mb-no-goals">–</div>`;
-  const awayGoals=sc.away.length
-    ?sc.away.map(goalRow).join('')
-    :`<div class="mb-no-goals">–</div>`;
-
-  const cardsHtml=cards.length?`
-    <div class="mb-cards">
-      <span class="mb-cards-label">CARDS</span>
-      ${cards.map(c=>`<span class="mb-card-chip">
-        <span class="card-icon">${c.color==='yellow'?'🟡':'🔴'}</span>${c.player||''}${c.clock?` ${c.clock}`:''}
-      </span>`).join('')}
-    </div>`:'';
-
-  return `
-    <div class="mb-header">
-      <span class="mb-title">GROUP ${m.grp} · FULL TIME</span>
-      <span class="mb-score">${m.hs} – ${m.as}</span>
-    </div>
-    <div class="mb-teams">
-      <div class="mb-team">
-        <div class="mb-team-name">${h.flag} ${h.name}</div>
-        ${homeGoals}
+  let inner='';
+  if(!hasData){
+    inner=`
+      <div class="mb-header">
+        <span class="mb-title">GROUP ${m.grp} · FULL TIME</span>
+        <span class="mb-score">${m.hs} – ${m.as}</span>
       </div>
-      <div class="mb-divider"></div>
-      <div class="mb-team away">
-        <div class="mb-team-name">${a.flag} ${a.name}</div>
-        ${awayGoals}
+      <div class="mb-no-data">
+        <div>Scorer data not yet available</div>
+        <div style="font-size:.6rem;margin-top:.3rem;color:var(--muted)">Updates after next ESPN sync</div>
       </div>
-    </div>
-    ${cardsHtml}
-    <div class="mb-flip-back">↻ tap to flip back</div>`;
+      <div class="mb-flip-back">↻ tap to flip back</div>`;
+  } else {
+    const homeGoals=sc.home.length?sc.home.map(goalRow).join(''):`<div class="mb-no-goals">–</div>`;
+    const awayGoals=sc.away.length?sc.away.map(goalRow).join(''):`<div class="mb-no-goals">–</div>`;
+    const cardsHtml=cards.length?`
+      <div class="mb-cards">
+        <span class="mb-cards-label">CARDS</span>
+        ${cards.map(c=>`<span class="mb-card-chip"><span>${c.color==='yellow'?'🟡':'🔴'}</span>${c.player||''}${c.clock?` ${c.clock}`:''}</span>`).join('')}
+      </div>`:'';
+    inner=`
+      <div class="mb-header">
+        <span class="mb-title">GROUP ${m.grp} · FULL TIME</span>
+        <span class="mb-score">${m.hs} – ${m.as}</span>
+      </div>
+      <div class="mb-teams">
+        <div class="mb-team"><div class="mb-team-name">${h.flag} ${h.name}</div>${homeGoals}</div>
+        <div class="mb-divider"></div>
+        <div class="mb-team away"><div class="mb-team-name">${a.flag} ${a.name}</div>${awayGoals}</div>
+      </div>
+      ${cardsHtml}
+      <div class="mb-flip-back">↻ tap to flip back</div>`;
+  }
+  return `<div class="mc-clip mc-clip-back" style="background:${backBg}">${inner}</div>`;
 }
 
 function buildCard(m){
@@ -594,16 +587,10 @@ function buildCard(m){
   const grad=`linear-gradient(135deg,${c1} 0%,${c1} 40%,${c2} 60%,${c2} 100%)`;
 
   if(m.st==='FT'){
-    // Flip card for completed matches
-    const backBg=`linear-gradient(135deg,${c1}18 0%,${c2}18 100%),var(--card)`;
-    return `<div class="mc-flip" style="--mc-grad:${grad};height:248px;" onclick="flipCard(this)">
+    return `<div class="mc-flip" style="height:248px;" onclick="flipCard(this)">
       <div class="mc-inner">
-        <div class="mc-face" style="background:var(--card)">
-          ${buildCardFront(m,h,a,c1,c2)}
-        </div>
-        <div class="mc-face mc-back-face" style="background:${backBg}">
-          ${buildCardBack(m,h,a,c1,c2)}
-        </div>
+        <div class="mc-face">${buildCardFront(m,h,a,c1,c2)}</div>
+        <div class="mc-face mc-back">${buildCardBack(m,h,a,c1,c2)}</div>
       </div>
     </div>`;
   }
