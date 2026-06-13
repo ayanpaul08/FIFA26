@@ -266,10 +266,16 @@ function parseEvents(data){
     const hId=resolveTeam(hc.team),aId=resolveTeam(ac.team);
     if(!hId||!aId)return[];
     const state=c.status?.type?.state||'pre';
+    const detail=c.status?.type?.shortDetail||'';
+    let clock='';
+    if(state==='in'){
+      if(/^HT$/i.test(detail.trim())||/half.?time/i.test(detail)) clock='HT';
+      else { const m=detail.match(/^(\d+(?:[+]\d+)?)'?/); clock=m?m[1]+"'":'LIVE'; }
+    }
     return[{home:hId,away:aId,
       hs:state!=='pre'?parseInt(hc.score||0):null,
       as:state!=='pre'?parseInt(ac.score||0):null,
-      st:state==='post'?'FT':state==='in'?'LIVE':'NS'}];
+      st:state==='post'?'FT':state==='in'?'LIVE':'NS',clock}];
   });
 }
 async function fetchAllRecent(){

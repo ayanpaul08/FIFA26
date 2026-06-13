@@ -129,6 +129,27 @@ a{text-decoration:none;color:inherit}
   .hero-year{display:none}
   .nav-logo{font-size:1.3rem}
 }
+
+/* ── RECENT RESULTS CONTROLS ─────────────────────── */
+.results-day-label{
+  font-family:'Bebas Neue',sans-serif;font-size:.95rem;letter-spacing:2px;
+  color:var(--muted);margin:1rem 0 .7rem;
+  display:flex;align-items:center;gap:.7rem;
+}
+.results-day-label::after{content:'';flex:1;height:1px;background:var(--border)}
+.results-day-label.latest{color:var(--text)}
+.load-more-btn{
+  display:flex;align-items:center;justify-content:center;gap:.6rem;
+  width:100%;margin-top:1.2rem;padding:.85rem 1.5rem;
+  background:var(--card);border:1px solid var(--border);
+  border-radius:10px;cursor:pointer;
+  font-family:'Inter',sans-serif;font-size:.82rem;font-weight:700;
+  color:var(--muted);letter-spacing:.5px;
+  transition:all .2s;
+}
+.load-more-btn:hover{border-color:rgba(255,215,0,.4);color:var(--gold);background:#0F1E2E}
+.load-more-btn .btn-icon{font-size:1rem;transition:transform .3s}
+.load-more-btn.expanded .btn-icon{transform:rotate(180deg)}
 </style>
 </head>
 <body>
@@ -254,11 +275,17 @@ function parseEvents(data){
     const hId=resolveTeam(hc.team), aId=resolveTeam(ac.team);
     if(!hId||!aId) return [];
     const state = c.status?.type?.state||'pre';
-    return [{
-      home:hId, away:aId,
+    const detail = c.status?.type?.shortDetail||'';
+    let clock='';
+    if(state==='in'){
+      if(/^HT$/i.test(detail.trim())||/half.?time/i.test(detail)) clock='HT';
+      else { const m=detail.match(/^(\d+(?:[+]\d+)?)'?/); clock=m?m[1]+"'":'LIVE'; }
+    }
+    return [{ home:hId, away:aId,
       hs: state!=='pre' ? parseInt(hc.score||0) : null,
       as: state!=='pre' ? parseInt(ac.score||0) : null,
       st: state==='post'?'FT': state==='in'?'LIVE':'NS',
+      clock,
     }];
   });
 }
@@ -344,12 +371,27 @@ function cdObj(u){const d=new Date(u)-new Date();if(d<=0)return null;return{D:Ma
 function startCD(el,u){const go=()=>{const c=cdObj(u);if(!c){el.innerHTML='<span class="cd-live">LIVE / FT</span>';return}el.innerHTML=`<div class="cdu"><span class="cdn">${String(c.D).padStart(2,'0')}</span><span class="cdl">D</span></div><span class="cdd">:</span><div class="cdu"><span class="cdn">${String(c.H).padStart(2,'0')}</span><span class="cdl">H</span></div><span class="cdd">:</span><div class="cdu"><span class="cdn">${String(c.M).padStart(2,'0')}</span><span class="cdl">M</span></div><span class="cdd">:</span><div class="cdu"><span class="cdn">${String(c.S).padStart(2,'0')}</span><span class="cdl">S</span></div>`};go();return setInterval(go,1000)}
 
 const cdTimers={}; // store interval IDs
+let olderExpanded=false; // persists across renderAll() calls
+
+window.toggleOlder=function(count){
+  olderExpanded=!olderExpanded;
+  const older=document.getElementById('older-results');
+  const btn=document.getElementById('load-more-btn');
+  const txt=document.getElementById('load-more-txt');
+  if(!older||!btn)return;
+  older.style.display=olderExpanded?'':'none';
+  btn.classList.toggle('expanded',olderExpanded);
+  const days=older.querySelectorAll('.results-day-label').length;
+  txt.textContent=olderExpanded
+    ?'Show less'
+    :`Load more results — ${count} match${count>1?'es':''} from ${days} earlier day${days>1?'s':''}`;
+};
 
 function buildCard(m){
   const h=TEAMS[m.home],a=TEAMS[m.away];
   const c1=h.colors[0],c2=a.colors[0];
   const isFT=m.st==='FT',isNS=m.st==='NS',isLive=m.st==='LIVE';
-  const stTxt=isFT?'Full Time':isLive?'🔴 Live':fmtTime(m.utc)+' IST';
+  const stTxt=isFT?'Full Time':isLive?(m.clock?m.clock+' 🔴':'🔴 Live'):fmtTime(m.utc)+' IST';
   const stCls=isFT?'ft':isLive?'live':'';
   const scoreHtml=isFT||isLive
     ?`<div class="mc-score">${m.hs}<span class="s"> – </span>${m.as}</div>`
@@ -410,11 +452,54 @@ function renderAll(){
     tel.innerHTML='<div style="color:var(--muted);padding:2rem;text-align:center;background:var(--card);border-radius:14px;font-size:.9rem;">🏆 No group stage matches today — check the <a href="schedule.html" style="color:var(--gold)">full schedule</a></div>';
   }
 
-  // Recent results (last 6)
-  const rec=ft.slice(-6).reverse();
+  // Recent results — grouped by IST date, latest day visible, older collapsed
   const rw=document.getElementById('results-wrap');
-  if(rec.length){rw.style.display='';document.getElementById('recent-matches').innerHTML=rec.map(buildCard).join('')}
-  else rw.style.display='none';
+  const recEl=document.getElementById('recent-matches');
+
+  if(!ft.length){ rw.style.display='none'; }
+  else {
+    rw.style.display='';
+
+    // Group by IST date key (YYYY-MM-DD), newest first
+    const ftByDate={};
+    [...ft].sort((a,b)=>new Date(b.utc)-new Date(a.utc)).forEach(m=>{
+      const d=toIST(m.utc);
+      const k=`${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+      (ftByDate[k]=ftByDate[k]||[]).push(m);
+    });
+    const dateKeys=Object.keys(ftByDate); // already newest-first from sort
+
+    function dayLabel(k){
+      // k = "2026-06-13" → parse and format
+      const [y,mo,dy]=k.split('-').map(Number);
+      return new Date(Date.UTC(y,mo-1,dy)).toLocaleDateString('en-IN',
+        {weekday:'long',day:'numeric',month:'long',timeZone:'UTC'}).toUpperCase();
+    }
+
+    function buildDayBlock(k,cls=''){
+      const label=dayLabel(k);
+      return `<div class="results-day-label ${cls}">${label}</div>
+              <div class="mgrid">${ftByDate[k].map(buildCard).join('')}</div>`;
+    }
+
+    const latestKey=dateKeys[0];
+    const olderKeys=dateKeys.slice(1);
+    const olderCount=olderKeys.reduce((s,k)=>s+ftByDate[k].length,0);
+
+    let html=buildDayBlock(latestKey,'latest');
+
+    if(olderCount>0){
+      const olderHtml=olderKeys.map(k=>buildDayBlock(k)).join('');
+      html+=`<div id="older-results" style="display:${olderExpanded?'':'none'}">${olderHtml}</div>
+             <button id="load-more-btn" class="load-more-btn${olderExpanded?' expanded':''}"
+               onclick="toggleOlder(${olderCount})">
+               <span class="btn-icon">▼</span>
+               <span id="load-more-txt">${olderExpanded?'Show less':`Load more results — ${olderCount} match${olderCount>1?'es':''} from ${olderKeys.length} earlier day${olderKeys.length>1?'s':''}`}</span>
+             </button>`;
+    }
+
+    recEl.innerHTML=html;
+  }
 
   // Start countdowns
   [...today,...live].forEach(m=>{

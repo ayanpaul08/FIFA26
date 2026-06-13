@@ -212,14 +212,17 @@ function parseEvents(data){
     const hId=resolveTeam(hc.team),aId=resolveTeam(ac.team);
     if(!hId||!aId)return[];
     const state=c.status?.type?.state||'pre';
-    // Also capture live clock if available
-    const clock=c.status?.displayClock||'';
-    const period=c.status?.period||0;
+    const detail=c.status?.type?.shortDetail||'';
+    let clock='';
+    if(state==='in'){
+      if(/^HT$/i.test(detail.trim())||/half.?time/i.test(detail)) clock='HT';
+      else { const m=detail.match(/^(\d+(?:[+]\d+)?)'?/); clock=m?m[1]+"'":'LIVE'; }
+    }
     return[{home:hId,away:aId,
       hs:state!=='pre'?parseInt(hc.score||0):null,
       as:state!=='pre'?parseInt(ac.score||0):null,
       st:state==='post'?'FT':state==='in'?'LIVE':'NS',
-      clock, period}];
+      clock}];
   });
 }
 async function fetchAllRecent(){
@@ -271,10 +274,10 @@ function buildScoreCell(m){
     </div>`;
   }
   if(m.st==='LIVE'){
-    const info=m.clock?` ${m.clock}${m.period===2?' HT':m.period>2?' ET':''}`:' LIVE';
+    const lbl=m.clock||'LIVE';
     return`<div class="sr-result">
       <span class="sr-score-num" style="color:var(--red)">${m.hs} – ${m.as}</span>
-      <span class="sr-badge live">${info.trim()}</span>
+      <span class="sr-badge live">${lbl}</span>
     </div>`;
   }
   return`<div class="sr-result"><span class="sr-ns">– – –</span></div>`;
