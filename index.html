@@ -434,10 +434,31 @@ function renderAll(){
   const live=gm.filter(m=>m.st==='LIVE');
   const ns=gm.filter(m=>m.st==='NS');
 
-  // Today window
+  // Today window — current IST calendar day
   const tS=istMidnight(0).getTime(),tE=istMidnight(1).getTime();
   let today=gm.filter(m=>m.st==='NS'&&new Date(m.utc)>=tS&&new Date(m.utc)<tE);
-  if(!today.length) today=ns.sort((a,b)=>new Date(a.utc)-new Date(b.utc)).slice(0,4);
+  let upcomingLabel='TODAY\'S MATCHES';
+
+  // No NS matches today — find ALL matches on the next upcoming IST day (no 4-cap)
+  if(!today.length && ns.length){
+    const nsGrouped={};
+    [...ns].sort((a,b)=>new Date(a.utc)-new Date(b.utc)).forEach(m=>{
+      const d=toIST(m.utc);
+      const k=`${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+      (nsGrouped[k]=nsGrouped[k]||[]).push(m);
+    });
+    const nextKey=Object.keys(nsGrouped).sort()[0];
+    if(nextKey){
+      today=nsGrouped[nextKey];
+      // Label: "TOMORROW'S MATCHES" if next day, otherwise the date
+      const nextIST=toIST(today[0].utc);
+      const tomorrowIST=new Date(tS+86400000*2); // midnight + 1 day
+      const isTomorrow=nextIST.getTime()<tomorrowIST.getTime();
+      upcomingLabel=isTomorrow
+        ?'TOMORROW\'S MATCHES'
+        :nextIST.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'}).toUpperCase()+' MATCHES';
+    }
+  }
 
   const tlbl=document.getElementById('today-lbl');
   const tel=document.getElementById('today-matches');
@@ -445,7 +466,7 @@ function renderAll(){
     tlbl.textContent='LIVE NOW';
     tel.innerHTML=[...live,...today].map(buildCard).join('');
   } else if(today.length){
-    tlbl.textContent='TODAY\'S MATCHES';
+    tlbl.textContent=upcomingLabel;
     tel.innerHTML=today.map(buildCard).join('');
   } else {
     tel.innerHTML='<div style="color:var(--muted);padding:2rem;text-align:center;background:var(--card);border-radius:14px;font-size:.9rem;">No group stage matches today — check the <a href="schedule.html" style="color:var(--gold)">full schedule</a></div>';
