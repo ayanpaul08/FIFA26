@@ -931,9 +931,168 @@ async function poll(){
 }
 
 // ══════════════════════════════════════════════════
-//  FOOTBALL NEWS — via allorigins.win CORS proxy
-//  Parses RSS XML directly in browser — no API key
+//  FOOTBALL NEWS — 4-source, 3-proxy fallback chain
+//  Primary: ESPN News API (same server as scores)
+//  Secondary: BBC + Guardian via proxy chain
 // ══════════════════════════════════════════════════
+
+function timeAgo(date){
+  const m=Math.floor((Date.now()-date.getTime())/60000);
+  if(m<2)return'just now';
+  if(m<60)return m+'m ago';
+  const h=Math.floor(m/60);
+  if(h<24)return h+'h ago';
+  return Math.floor(h/24)+'d ago';
+}
+function stripHtml(s){
+  return(s||'').replace(/<!\[CDATA\[|\]\]>/g,'').replace(/<[^>]*>/g,'')
+    .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>')
+    .replace(/&quot;/g,'"').replace(/&nbsp;/g,' ').replace(/&#\d+;/g,'').trim();
+}
+function raceTimeout(p,ms){
+  return Promise.race([p,new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),ms))]);
+}
+
+// ── Source 1 & 2: ESPN News API ───────────────────
+async function fetchESPNNews(slug=''){
+  const url=slug
+    ?`https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/news?limit=10`
+    :`https://site.api.espn.com/apis/site/v2/sports/soccer/news?limit=10`;
+  const r=await fetch(url);
+  if(!r.ok) throw new Error(r.status);
+  const d=await r.json();
+  return(d.articles||[]).map(a=>({
+    title: a.headline||'',
+    link:  a.links?.web?.href||a.links?.mobile?.href||'#',
+    date:  new Date(a.published||0),
+    excerpt:(a.description||'').replace(/<[^>]*>/g,'').slice(0,140),
+    thumb: a.images?.[0]?.url||'',
+    src:  'ESPN',
+  }));
+}
+
+// ── RSS XML parser ────────────────────────────────
+function parseRSS(xmlStr,src){
+  try{
+    const xml=new DOMParser().parseFromString(xmlStr,'text/xml');
+    if(xml.querySelector('parsererror')) return [];
+    return Array.from(xml.querySelectorAll('item')).slice(0,8).map(item=>{
+      const get=tag=>item.getElementsByTagName(tag)[0]?.textContent?.trim()||'';
+      const enc=item.getElementsByTagName('enclosure')[0];
+      const med=item.getElementsByTagNameNS('http://search.yahoo.com/mrss/','thumbnail')[0];
+      const thumb=enc?.getAttribute('url')||med?.getAttribute('url')||'';
+      return{
+        title:  stripHtml(get('title')),
+        link:   get('link')||get('guid')||'#',
+        date:   new Date(get('pubDate')),
+        excerpt:stripHtml(get('description')).slice(0,140),
+        thumb:  thumb.startsWith('http')?thumb:'',
+        src,
+      };
+    }).filter(n=>n.title);
+  }catch(e){return[];}
+}
+
+// ── Source 3 & 4: RSS via 3-proxy fallback chain ──
+async function fetchRSSFeed(feedUrl,src){
+  // Try each proxy in order; first one that returns valid XML wins
+  const proxies=[
+    // Proxy A — allorigins.win (JSON wrapper)
+    async()=>{
+      const r=await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(feedUrl)}&t=${Date.now()}`);
+      const d=await r.json();
+      return d.contents||'';
+    },
+    // Proxy B — corsproxy.io (raw content)
+    async()=>{
+      const r=await fetch(`https://corsproxy.io/?${encodeURIComponent(feedUrl)}`);
+      return r.text();
+    },
+    // Proxy C — codetabs proxy (raw content)
+    async()=>{
+      const r=await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(feedUrl)}`);
+      return r.text();
+    },
+  ];
+
+  for(const attempt of proxies){
+    try{
+      const content=await raceTimeout(attempt(),8000);
+      if(!content||content.length<200) continue;
+      const items=parseRSS(content,src);
+      if(items.length>0){
+        console.log(`[News] ${src} via proxy ✓ (${items.length} items)`);
+        return items;
+      }
+    }catch(e){/* try next proxy */}
+  }
+  console.warn('[News]',src,'— all proxies failed');
+  return[];
+}
+
+// ── Merge, dedup, sort all sources ───────────────
+async function fetchAllNews(){
+  const [espnGeneral,espnWC,bbc,guardian]=await Promise.all([
+    raceTimeout(fetchESPNNews(),      8000).catch(()=>[]),
+    raceTimeout(fetchESPNNews('fifa.world'),8000).catch(()=>[]),
+    raceTimeout(fetchRSSFeed('https://feeds.bbci.co.uk/sport/football/rss.xml','BBC Sport'),12000).catch(()=>[]),
+    raceTimeout(fetchRSSFeed('https://www.theguardian.com/football/rss','The Guardian'),12000).catch(()=>[]),
+  ]);
+
+  const all=[...espnGeneral,...espnWC,...bbc,...guardian];
+  console.log(`[News] Total raw items: ${all.length} (ESPN:${espnGeneral.length+espnWC.length} BBC:${bbc.length} Guardian:${guardian.length})`);
+
+  const seen=new Set();
+  return all
+    .filter(n=>{
+      if(!n.title) return false;
+      const k=n.title.slice(0,40).toLowerCase().replace(/\s+/g,'');
+      if(seen.has(k)) return false;
+      seen.add(k); return true;
+    })
+    .sort((a,b)=>b.date-a.date)
+    .slice(0,9);
+}
+
+function renderNews(items){
+  const grid=document.getElementById('news-grid');
+  if(!grid)return;
+  if(!items.length){
+    grid.innerHTML='<div class="news-empty">Headlines unavailable — will retry in 15 min</div>';
+    return;
+  }
+  grid.innerHTML=items.map(n=>`
+    <a class="news-card" href="${n.link}" target="_blank" rel="noopener noreferrer">
+      <div class="news-thumb" ${n.thumb?`style="background-image:url('${n.thumb}')"`:''}>
+        ${n.thumb?'':'⚽'}
+      </div>
+      <div class="news-body">
+        <div class="news-meta">
+          <span class="news-src">${n.src}</span>
+          <span class="news-ago">${timeAgo(n.date)}</span>
+        </div>
+        <div class="news-title">${n.title}</div>
+        <div class="news-excerpt">${n.excerpt}</div>
+        <div class="news-read">Read more →</div>
+      </div>
+    </a>`).join('');
+}
+
+async function initNews(){
+  const grid=document.getElementById('news-grid');
+  if(grid) grid.innerHTML='<div class="news-empty"><span class="spin"></span> &nbsp;Loading headlines…</div>';
+  renderNews(await fetchAllNews());
+  // Refresh every 15 minutes
+  setInterval(async()=>{
+    const fresh=await fetchAllNews();
+    if(fresh.length) renderNews(fresh);
+  },15*60*1000);
+}
+
+// ── KICK IT OFF ───────────────────────────────────
+renderAll();
+poll();
+initNews();
 const NEWS_FEEDS=[
   {url:'https://feeds.bbci.co.uk/sport/football/rss.xml', src:'BBC Sport'},
   {url:'https://www.theguardian.com/football/rss',         src:'The Guardian'},
