@@ -174,7 +174,7 @@ a{text-decoration:none;color:inherit}
 <div class="hero">
   <div class="hero-bg"></div>
   <div class="hero-pitch"></div>
-  <div class="hero-eye">🇮🇳 India's Home for the Beautiful Game</div>
+  <div class="hero-eye">India's Home for the Beautiful Game</div>
   <h1 class="hero-title"><span class="l1">FIFA World Cup</span></h1>
   <div class="hero-year">2026</div>
   <p class="hero-sub">USA · Canada · Mexico &nbsp;|&nbsp; 11 June – 19 July 2026 &nbsp;|&nbsp; All times in IST</p>
@@ -187,16 +187,16 @@ a{text-decoration:none;color:inherit}
 </div>
 
 <div class="wrap">
-  <div class="sh" id="today-lbl">⚽ TODAY'S MATCHES</div>
+  <div class="sh" id="today-lbl">TODAY'S MATCHES</div>
   <div class="mgrid" id="today-matches"></div>
 
   <div style="margin-top:2.5rem" id="results-wrap">
-    <div class="sh">✅ RECENT RESULTS</div>
-    <div class="mgrid" id="recent-matches"></div>
+    <div class="sh">RECENT RESULTS</div>
+    <div id="recent-matches"></div>
   </div>
 
   <div style="margin-top:2.5rem">
-    <div class="sh">📊 GROUP STANDINGS</div>
+    <div class="sh">GROUP STANDINGS</div>
     <div class="sgrid" id="standings-grid"></div>
   </div>
 </div>
@@ -345,7 +345,7 @@ let nextTimer=null, nextTick=0;
 function setStatus(mode,msg){
   dotEl.className='';
   if(mode==='syncing'){dotEl.classList.add('syncing');txtEl.innerHTML=`<span class="spin"></span> &nbsp;${msg||'Fetching from ESPN…'}`}
-  else if(mode==='live'){dotEl.classList.add('live');txtEl.innerHTML=`🔴 LIVE MATCH — ${msg||'Auto-updating every 30s'}`}
+  else if(mode==='live'){dotEl.classList.add('live');txtEl.innerHTML=`LIVE MATCH — ${msg||'Auto-updating every 30s'}`}
   else if(mode==='ok'){dotEl.classList.add('ok');txtEl.textContent=msg||'Results up to date'}
   else if(mode==='error'){dotEl.classList.add('error');txtEl.textContent=msg||'ESPN unreachable — retrying…'}
 }
@@ -373,18 +373,17 @@ function startCD(el,u){const go=()=>{const c=cdObj(u);if(!c){el.innerHTML='<span
 const cdTimers={}; // store interval IDs
 let olderExpanded=false; // persists across renderAll() calls
 
-window.toggleOlder=function(count){
+window.toggleOlder=function(count,days){
   olderExpanded=!olderExpanded;
   const older=document.getElementById('older-results');
   const btn=document.getElementById('load-more-btn');
   const txt=document.getElementById('load-more-txt');
   if(!older||!btn)return;
-  older.style.display=olderExpanded?'':'none';
+  older.style.display=olderExpanded?'block':'none';
   btn.classList.toggle('expanded',olderExpanded);
-  const days=older.querySelectorAll('.results-day-label').length;
   txt.textContent=olderExpanded
     ?'Show less'
-    :`Load more results — ${count} match${count>1?'es':''} from ${days} earlier day${days>1?'s':''}`;
+    :'Load more results';
 };
 
 function buildCard(m){
@@ -409,7 +408,7 @@ function buildCard(m){
         <div class="mc-mid">${scoreHtml}${cdHtml}</div>
         <div class="mc-team"><div class="mc-flag">${a.flag}</div><div class="mc-nm"><a href="team.html?team=${m.away}">${a.name}</a></div></div>
       </div>
-      <div class="mc-foot"><span class="time">🕐 ${fmtIST(m.utc)}</span><span>📍 ${m.venue.split(',')[0]}</span></div>
+      <div class="mc-foot"><span class="time">${fmtIST(m.utc)}</span><span>📍 ${m.venue.split(',')[0]}</span></div>
     </div>
   </div>`;
 }
@@ -443,16 +442,16 @@ function renderAll(){
   const tlbl=document.getElementById('today-lbl');
   const tel=document.getElementById('today-matches');
   if(live.length){
-    tlbl.textContent='🔴 LIVE NOW';
+    tlbl.textContent='LIVE NOW';
     tel.innerHTML=[...live,...today].map(buildCard).join('');
   } else if(today.length){
-    tlbl.textContent='⚽ TODAY\'S MATCHES';
+    tlbl.textContent='TODAY\'S MATCHES';
     tel.innerHTML=today.map(buildCard).join('');
   } else {
-    tel.innerHTML='<div style="color:var(--muted);padding:2rem;text-align:center;background:var(--card);border-radius:14px;font-size:.9rem;">🏆 No group stage matches today — check the <a href="schedule.html" style="color:var(--gold)">full schedule</a></div>';
+    tel.innerHTML='<div style="color:var(--muted);padding:2rem;text-align:center;background:var(--card);border-radius:14px;font-size:.9rem;">No group stage matches today — check the <a href="schedule.html" style="color:var(--gold)">full schedule</a></div>';
   }
 
-  // Recent results — grouped by IST date, latest day visible, older collapsed
+  // Recent results — latest day always visible, older days collapse below a button
   const rw=document.getElementById('results-wrap');
   const recEl=document.getElementById('recent-matches');
 
@@ -467,18 +466,17 @@ function renderAll(){
       const k=`${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
       (ftByDate[k]=ftByDate[k]||[]).push(m);
     });
-    const dateKeys=Object.keys(ftByDate); // already newest-first from sort
+    const dateKeys=Object.keys(ftByDate); // already newest-first
 
     function dayLabel(k){
-      // k = "2026-06-13" → parse and format
       const [y,mo,dy]=k.split('-').map(Number);
       return new Date(Date.UTC(y,mo-1,dy)).toLocaleDateString('en-IN',
         {weekday:'long',day:'numeric',month:'long',timeZone:'UTC'}).toUpperCase();
     }
 
+    // Each day block = date label + its own full-width card grid
     function buildDayBlock(k,cls=''){
-      const label=dayLabel(k);
-      return `<div class="results-day-label ${cls}">${label}</div>
+      return `<div class="results-day-label ${cls}">${dayLabel(k)}</div>
               <div class="mgrid">${ftByDate[k].map(buildCard).join('')}</div>`;
     }
 
@@ -486,16 +484,21 @@ function renderAll(){
     const olderKeys=dateKeys.slice(1);
     const olderCount=olderKeys.reduce((s,k)=>s+ftByDate[k].length,0);
 
+    // Structure: latest day → button → older days (below, not beside)
     let html=buildDayBlock(latestKey,'latest');
 
     if(olderCount>0){
       const olderHtml=olderKeys.map(k=>buildDayBlock(k)).join('');
-      html+=`<div id="older-results" style="display:${olderExpanded?'':'none'}">${olderHtml}</div>
-             <button id="load-more-btn" class="load-more-btn${olderExpanded?' expanded':''}"
-               onclick="toggleOlder(${olderCount})">
-               <span class="btn-icon">▼</span>
-               <span id="load-more-txt">${olderExpanded?'Show less':`Load more results — ${olderCount} match${olderCount>1?'es':''} from ${olderKeys.length} earlier day${olderKeys.length>1?'s':''}`}</span>
-             </button>`;
+      const btnLabel='Load more results';
+      html+=`
+        <button id="load-more-btn" class="load-more-btn${olderExpanded?' expanded':''}"
+          onclick="toggleOlder(${olderCount},${olderKeys.length})">
+          <span class="btn-icon">▼</span>
+          <span id="load-more-txt">${olderExpanded?'Show less':btnLabel}</span>
+        </button>
+        <div id="older-results" style="display:${olderExpanded?'block':'none'}">
+          ${olderHtml}
+        </div>`;
     }
 
     recEl.innerHTML=html;
@@ -510,7 +513,7 @@ function renderAll(){
   // Standings
   document.getElementById('standings-grid').innerHTML=GROUPS.map(g=>{
     const rows=standings(g);
-    return`<div class="sc"><div class="sc-hd">⚽ GROUP ${g}</div>
+    return`<div class="sc"><div class="sc-hd">GROUP ${g}</div>
       <table class="st"><thead><tr><th>#</th><th>Team</th><th>GP</th><th>W</th><th>D</th><th>L</th><th>GF:GA</th><th>GD</th><th>Pts</th></tr></thead>
       <tbody>${rows.map((r,i)=>{const t=TEAMS[r.id];if(!t)return'';const gd=r.gf-r.ga;const cls=i<2?'top':i===2?'bub':'';return`<tr class="${cls}"><td class="rn">${i+1}</td><td><div class="tc"><span class="f">${t.flag}</span><a href="team.html?team=${r.id}">${t.name}</a></div></td><td>${r.gp}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td><td style="color:var(--muted)">${r.gf}:${r.ga}</td><td class="gd ${gd>0?'p':gd<0?'n':''}">${gd>0?'+':''}${gd}</td><td class="pts">${r.pts}</td></tr>`}).join('')}</tbody>
       </table></div>`;
