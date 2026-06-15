@@ -243,7 +243,33 @@ a{text-decoration:none;color:inherit}
 .pw-pos.FWD{background:rgba(255,215,0,.12);color:var(--gold)}
 .pw-rt{font-family:'Orbitron',monospace;font-size:.58rem;color:var(--gold);font-weight:700;flex-shrink:0}
 
-/* ── NEWS SECTION ────────────────────────────────── */
+/* ── MATCH STATS BARS (card back) ──────────────── */
+.stats-block{flex:1;display:flex;flex-direction:column;gap:.22rem;margin-bottom:.45rem}
+.stat-row{display:grid;grid-template-columns:48px 1fr 48px;align-items:center;gap:.25rem}
+.stat-lv{font-size:.68rem;font-weight:800;color:rgba(255,255,255,.9);text-align:right;white-space:nowrap}
+.stat-rv{font-size:.68rem;font-weight:800;color:rgba(255,255,255,.9);white-space:nowrap}
+.stat-mid{display:flex;flex-direction:column;gap:2px}
+.stat-lbl{font-size:.46rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);text-align:center}
+.stat-track{height:3px;display:flex;border-radius:2px;overflow:hidden}
+.stat-hfill{height:100%;border-radius:2px 0 0 2px;flex-shrink:0}
+.stat-afill{height:100%;border-radius:0 2px 2px 0;flex:1;opacity:.35}
+
+/* Compact scorers on stats card */
+.sc-cols{display:grid;grid-template-columns:1fr 1px 1fr;gap:.3rem;border-top:1px solid rgba(255,255,255,.07);padding-top:.4rem;margin-top:auto}
+.sc-col{font-size:.6rem;color:rgba(255,255,255,.78)}
+.sc-col.away{padding-left:.4rem}
+.sc-divider{background:rgba(255,255,255,.07)}
+.sc-item{display:flex;align-items:baseline;gap:.25rem;margin-bottom:.15rem}
+.sc-t{font-family:'Orbitron',monospace;font-size:.52rem;color:var(--gold);flex-shrink:0}
+.sc-n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sc-og{font-size:.48rem;color:var(--red);background:rgba(255,59,78,.15);padding:.05rem .2rem;border-radius:2px}
+.sc-cards{display:flex;gap:.4rem;font-size:.58rem;color:rgba(255,255,255,.55);margin-top:.25rem;flex-wrap:wrap}
+
+/* Back header with score inline */
+.mb-score-line{display:flex;justify-content:space-between;align-items:center;padding-bottom:.4rem;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:.45rem}
+.mb-grp-lbl{font-family:'Bebas Neue',sans-serif;font-size:.82rem;letter-spacing:2px;color:var(--gold)}
+.mb-score-big{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:3px;color:#fff}
+.mb-teams-lbl{display:flex;justify-content:space-between;font-size:.58rem;font-weight:800;color:rgba(255,255,255,.45);text-transform:uppercase;margin-bottom:.3rem}
 .news-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem}
 .news-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column;text-decoration:none;color:inherit;transition:transform .2s,border-color .2s}
 .news-card:hover{transform:translateY(-3px);border-color:rgba(255,215,0,.3)}
@@ -445,7 +471,6 @@ function parseEvents(data){
       const side=isHomeTeam?'home':'away';
       if(dtype.includes('goal')||dtype==='penalty - scored'){
         const og=dtype.includes('own goal');
-        // Own goal goes to opposite team's tally
         scorers[og?(isHomeTeam?'away':'home'):side].push({player:dplayer,clock:dclock,og});
       } else if(dtype.includes('yellow card')){
         cards.push({player:dplayer,clock:dclock,color:'yellow',side});
@@ -454,11 +479,32 @@ function parseEvents(data){
       }
     });
 
+    // Capture match statistics (shots, possession, saves, etc.)
+    const parseStat=(arr,name)=>{
+      const s=(arr||[]).find(x=>x.name===name||x.abbreviation===name);
+      return s?parseFloat(s.value||0):null;
+    };
+    const hStats=hc.statistics||[];
+    const aStats=ac.statistics||[];
+    const stats={
+      possession: { h:parseStat(hStats,'possessionPct'), a:parseStat(aStats,'possessionPct') },
+      shots:      { h:parseStat(hStats,'shots')||parseStat(hStats,'totalAttempts'),
+                    a:parseStat(aStats,'shots')||parseStat(aStats,'totalAttempts') },
+      shotsOT:    { h:parseStat(hStats,'shotsOnTarget')||parseStat(hStats,'onTargetAttempts'),
+                    a:parseStat(aStats,'shotsOnTarget')||parseStat(aStats,'onTargetAttempts') },
+      saves:      { h:parseStat(hStats,'saves'), a:parseStat(aStats,'saves') },
+      fouls:      { h:parseStat(hStats,'fouls'), a:parseStat(aStats,'fouls') },
+      corners:    { h:parseStat(hStats,'cornerKicks')||parseStat(hStats,'corners'),
+                    a:parseStat(aStats,'cornerKicks')||parseStat(aStats,'corners') },
+      offsides:   { h:parseStat(hStats,'offsides'), a:parseStat(aStats,'offsides') },
+    };
+    const hasStats=Object.values(stats).some(s=>s.h!==null||s.a!==null);
+
     return [{home:hId,away:aId,
       hs:state!=='pre'?parseInt(hc.score||0):null,
       as:state!=='pre'?parseInt(ac.score||0):null,
       st:state==='post'?'FT':state==='in'?'LIVE':'NS',
-      clock,scorers,cards}];
+      clock,scorers,cards,stats:hasStats?stats:null}];
   });
 }
 
@@ -489,6 +535,7 @@ function patchMatches(live){
     if(r.clock!==undefined) m.clock=r.clock;
     if(r.scorers&&(r.scorers.home.length||r.scorers.away.length)) m.scorers=r.scorers;
     if(r.cards&&r.cards.length) m.cards=r.cards;
+    if(r.stats) m.stats=r.stats;
   });
   return changed;
 }
@@ -636,54 +683,77 @@ function buildCardFront(m,h,a,c1,c2){
 function buildCardBack(m,h,a,c1,c2){
   const sc=m.scorers||{home:[],away:[]};
   const cards=m.cards||[];
-  const hasData=sc.home.length||sc.away.length||cards.length;
-  const backBg=`linear-gradient(135deg,${c1}18 0%,${c2}18 100%),var(--card)`;
+  const st=m.stats||null;
   const isLive=m.st==='LIVE';
-  const statusLabel=isLive
-    ?`<span class="mb-title live" style="color:var(--red)">GROUP ${m.grp} · ${m.clock||'LIVE'} 🔴</span>`
-    :`<span class="mb-title">GROUP ${m.grp} · FULL TIME</span>`;
-  const noDataMsg=isLive?'Scorer data updates every 30s':'Updates after next ESPN sync';
+  const backBg=`linear-gradient(135deg,${c1}18 0%,${c2}18 100%),var(--card)`;
+  const statusTxt=isLive?`${m.clock||'LIVE'} 🔴`:'FULL TIME';
 
-  function goalRow(s){
-    return `<div class="mb-goal">
-      <span class="gclock">${s.clock}</span>
-      <span class="gname">${s.player}${s.og?'<span class="og">OG</span>':''}</span>
+  // ── Stat bar row ──────────────────────────────
+  function statRow(label,hv,av,hNum,aNum){
+    if(hNum===null&&aNum===null) return '';
+    const total=(hNum||0)+(aNum||0);
+    const hp=total>0?Math.round((hNum||0)/total*100):50;
+    return `<div class="stat-row">
+      <span class="stat-lv">${hv??'–'}</span>
+      <div class="stat-mid">
+        <span class="stat-lbl">${label}</span>
+        <div class="stat-track">
+          <div class="stat-hfill" style="width:${hp}%;background:${c1}"></div>
+          <div class="stat-afill" style="background:${c2}"></div>
+        </div>
+      </div>
+      <span class="stat-rv">${av??'–'}</span>
     </div>`;
   }
 
-  let inner='';
-  if(!hasData){
-    inner=`
-      <div class="mb-header">
-        ${statusLabel}
-        <span class="mb-score">${m.hs} – ${m.as}</span>
+  // ── Stats block (if available) ────────────────
+  let statsHtml='';
+  if(st){
+    const pct=v=>v!==null?Math.round(v)+'%':null;
+    const shotDisp=(shots,sot)=>shots!==null?(sot!==null?`${Math.round(shots)}(${Math.round(sot)})`:Math.round(shots)):null;
+    statsHtml=`<div class="stats-block">
+      ${statRow('POSSESSION',pct(st.possession?.h),pct(st.possession?.a),st.possession?.h,st.possession?.a)}
+      ${statRow('SHOTS (ON TGT)',shotDisp(st.shots?.h,st.shotsOT?.h),shotDisp(st.shots?.a,st.shotsOT?.a),st.shots?.h,st.shots?.a)}
+      ${statRow('SAVES',st.saves?.h!==null?Math.round(st.saves?.h??0):null,st.saves?.a!==null?Math.round(st.saves?.a??0):null,st.saves?.h,st.saves?.a)}
+      ${statRow('FOULS',st.fouls?.h!==null?Math.round(st.fouls?.h??0):null,st.fouls?.a!==null?Math.round(st.fouls?.a??0):null,st.fouls?.h,st.fouls?.a)}
+      ${statRow('CORNERS',st.corners?.h!==null?Math.round(st.corners?.h??0):null,st.corners?.a!==null?Math.round(st.corners?.a??0):null,st.corners?.h,st.corners?.a)}
+    </div>`;
+  }
+
+  // ── Compact scorers ───────────────────────────
+  const scItem=s=>`<div class="sc-item"><span class="sc-t">${s.clock||''}</span><span class="sc-n">${s.player||''}${s.og?'<span class="sc-og">OG</span>':''}</span></div>`;
+  const hGoals=sc.home.length?sc.home.map(scItem).join(''):'<span style="color:var(--muted);font-size:.58rem">–</span>';
+  const aGoals=sc.away.length?sc.away.map(scItem).join(''):'<span style="color:var(--muted);font-size:.58rem">–</span>';
+  const cardsLine=cards.length
+    ?`<div class="sc-cards">${cards.map(c=>`<span>${c.color==='yellow'?'🟡':'🔴'} ${c.player||''}${c.clock?` ${c.clock}`:''}</span>`).join('')}</div>`
+    :'';
+
+  const hasAnyData=sc.home.length||sc.away.length||cards.length||st;
+
+  const inner=!hasAnyData
+    ?`<div class="mb-score-line">
+        <span class="mb-grp-lbl">GROUP ${m.grp} · ${statusTxt}</span>
+        <span class="mb-score-big">${m.hs} – ${m.as}</span>
       </div>
       <div class="mb-no-data">
-        <div>Scorer data not yet available</div>
-        <div style="font-size:.6rem;margin-top:.3rem;color:var(--muted)">${noDataMsg}</div>
+        <div>Match data loading…</div>
+        <div style="font-size:.58rem;margin-top:.3rem;color:var(--muted)">${isLive?'Updates every 30s':'Updates after ESPN sync'}</div>
       </div>
+      <div class="mb-flip-back">TAP TO FLIP</div>`
+    :`<div class="mb-score-line">
+        <span class="mb-grp-lbl" style="${isLive?'color:var(--red)':''}">${isLive?'🔴 ':''}GROUP ${m.grp} · ${statusTxt}</span>
+        <span class="mb-score-big">${m.hs} – ${m.as}</span>
+      </div>
+      <div class="mb-teams-lbl"><span>${h.flag} ${h.name}</span><span>${a.flag} ${a.name}</span></div>
+      ${statsHtml}
+      <div class="sc-cols">
+        <div class="sc-col">${hGoals}</div>
+        <div class="sc-divider"></div>
+        <div class="sc-col away">${aGoals}</div>
+      </div>
+      ${cardsLine}
       <div class="mb-flip-back">TAP TO FLIP</div>`;
-  } else {
-    const homeGoals=sc.home.length?sc.home.map(goalRow).join(''):`<div class="mb-no-goals">–</div>`;
-    const awayGoals=sc.away.length?sc.away.map(goalRow).join(''):`<div class="mb-no-goals">–</div>`;
-    const cardsHtml=cards.length?`
-      <div class="mb-cards">
-        <span class="mb-cards-label">CARDS</span>
-        ${cards.map(c=>`<span class="mb-card-chip"><span>${c.color==='yellow'?'🟡':'🔴'}</span>${c.player||''}${c.clock?` ${c.clock}`:''}</span>`).join('')}
-      </div>`:'';
-    inner=`
-      <div class="mb-header">
-        ${statusLabel}
-        <span class="mb-score">${m.hs} – ${m.as}</span>
-      </div>
-      <div class="mb-teams">
-        <div class="mb-team"><div class="mb-team-name">${h.flag} ${h.name}</div>${homeGoals}</div>
-        <div class="mb-divider"></div>
-        <div class="mb-team away"><div class="mb-team-name">${a.flag} ${a.name}</div>${awayGoals}</div>
-      </div>
-      ${cardsHtml}
-      <div class="mb-flip-back">TAP TO FLIP</div>`;
-  }
+
   return `<div class="mc-clip mc-clip-back" style="background:${backBg}">${inner}</div>`;
 }
 
@@ -756,8 +826,8 @@ function buildCard(m){
   const grad=`linear-gradient(135deg,${c1} 0%,${c1} 40%,${c2} 60%,${c2} 100%)`;
 
   if(m.st==='FT'||m.st==='LIVE'){
-    // Both FT and LIVE get flip card: front = score/time, back = scorers & cards
-    return `<div class="mc-flip" style="height:248px;" onclick="flipCard(this)">
+    // Both FT and LIVE get flip card: front = score/time, back = stats + scorers
+    return `<div class="mc-flip" style="height:300px;" onclick="flipCard(this)">
       <div class="mc-inner">
         <div class="mc-face">${buildCardFront(m,h,a,c1,c2)}</div>
         <div class="mc-face mc-back">${buildCardBack(m,h,a,c1,c2)}</div>
