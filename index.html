@@ -333,8 +333,7 @@ a{text-decoration:none;color:inherit}
 <!-- LIVE STATUS BAR -->
 <div id="live-bar">
   <span id="live-dot"></span>
-  <span id="live-txt">Connecting to ESPN…</span>
-  <span id="live-source">via ESPN API</span>
+  <span id="live-txt">Connecting…</span>
   <span id="live-next"></span>
 </div>
 
@@ -571,12 +570,28 @@ const txtEl =document.getElementById('live-txt');
 const nextEl=document.getElementById('live-next');
 let nextTimer=null, nextTick=0;
 
-function setStatus(mode,msg){
+// Compute "Next match in Xh Ym" from upcoming NS matches
+function nextMatchLabel(){
+  const GRPS=['A','B','C','D','E','F','G','H','I','J','K','L'];
+  const upcoming=MATCHES.filter(m=>GRPS.includes(m.grp)&&m.st==='NS')
+    .sort((a,b)=>new Date(a.utc)-new Date(b.utc));
+  if(!upcoming.length) return 'No upcoming matches';
+  const diffMs=new Date(upcoming[0].utc)-Date.now();
+  if(diffMs<=0) return 'Match starting…';
+  const totalMins=Math.floor(diffMs/60000);
+  const h=Math.floor(totalMins/60), m=totalMins%60;
+  return h>0?`Next match in ${h}h ${m}m`:`Next match in ${m}m`;
+}
+
+function setStatus(mode){
   dotEl.className='';
-  if(mode==='syncing'){dotEl.classList.add('syncing');txtEl.innerHTML=`<span class="spin"></span> &nbsp;${msg||'Fetching from ESPN…'}`}
-  else if(mode==='live'){dotEl.classList.add('live');txtEl.innerHTML=`LIVE MATCH — ${msg||'Auto-updating every 30s'}`}
-  else if(mode==='ok'){dotEl.classList.add('ok');txtEl.textContent=msg||'Results up to date'}
-  else if(mode==='error'){dotEl.classList.add('error');txtEl.textContent=msg||'ESPN unreachable — retrying…'}
+  if(mode==='live'){
+    dotEl.classList.add('live');
+    txtEl.innerHTML='🔴 Live Match';
+  } else {
+    dotEl.classList.add('ok');
+    txtEl.textContent=nextMatchLabel();
+  }
 }
 function startNextCountdown(ms){
   clearInterval(nextTimer);
@@ -867,7 +882,7 @@ function buildCard(m){
       </div>
       <div class="flip-hint">TAP TO FLIP</div>
     </div>`;
-    return `<div class="mc-flip" style="height:272px;" onclick="flipCard(this)">
+    return `<div class="mc-flip" data-mid="${m.id}" style="height:272px;" onclick="flipCard(this)">
       <div class="mc-inner">
         <div class="mc-face">${frontHtml}</div>
         <div class="mc-face mc-back">${buildNSCardBack(m,h,a,c1,c2)}</div>
@@ -1078,6 +1093,12 @@ function computeAndRenderStats(){
 }
 
 function renderAll(){
+  // ── Save which cards are currently flipped ────────
+  // so ESPN refresh doesn't snap them back to front
+  const flippedMids=new Set(
+    Array.from(document.querySelectorAll('.mc-flip.flipped'))
+      .map(el=>el.dataset.mid).filter(Boolean)
+  );
   // Clear existing countdown timers
   Object.values(cdTimers).forEach(clearInterval);
 
@@ -1197,6 +1218,29 @@ function renderAll(){
   }).join('');
   // Update live tournament stats whenever match data changes
   computeAndRenderStats();
+
+  // ── Restore previously flipped cards ────────────
+  // After DOM rebuild, instantly re-flip any card the user had open
+  // Uses no transition so there's zero visible flicker
+  if(flippedMids.size>0){
+    flippedMids.forEach(mid=>{
+      const card=document.querySelector(`.mc-flip[data-mid="${mid}"]`);
+      if(!card) return;
+      const inner=card.querySelector('.mc-inner');
+      const front=card.querySelector('.mc-face:not(.mc-back)');
+      const back =card.querySelector('.mc-back');
+      if(!inner||!front||!back) return;
+      inner.style.transition='none';       // disable animation for instant restore
+      inner.style.transform='rotateY(180deg)';
+      front.style.visibility='hidden';
+      back.style.visibility='visible';
+      card.classList.add('flipped');
+      // Re-enable transition after paint so next user flip still animates
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{
+        inner.style.transition='';
+      }));
+    });
+  }
 }
 
 function istMidnight(off=0){
@@ -1209,7 +1253,6 @@ let pollTimer=null;
 let fetchCount=0;
 
 async function poll(){
-  setStatus('syncing');
   let changed=false;
   let hasError=false;
   try{
@@ -1228,14 +1271,8 @@ async function poll(){
   const isLiveNow=MATCHES.some(m=>GROUPS.includes(m.grp)&&m.st==='LIVE');
   const ms=nextInterval();
 
-  if(hasError){
-    setStatus('error',`ESPN unreachable — retrying in ${Math.round(ms/60000)}min`);
-  } else if(isLiveNow){
-    setStatus('live','Updating every 30s');
-  } else {
-    const ago=fetchCount===1?'just now':'just now';
-    setStatus('ok',`Results up to date · Synced ${ago} (ESPN)`);
-  }
+  // Left label: 🔴 Live Match OR "Next match in Xh Ym"
+  setStatus(isLiveNow?'live':'ok');
 
   startNextCountdown(ms);
   clearTimeout(pollTimer);
