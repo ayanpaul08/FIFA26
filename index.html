@@ -737,10 +737,12 @@ function buildCardBack(m,h,a,c1,c2){
     :'';
 
   const hasAnyData=sc.home.length||sc.away.length||cards.length||st;
+  // Show loading placeholder when match is FT but stats haven't arrived yet
+  const statsLoading=!st&&(m.espnId)&&!_statsFetched?.has(m.espnId);
 
   const inner=!hasAnyData
     ?`<div class="mb-score-line">
-        <span class="mb-grp-lbl">GROUP ${m.grp} · ${statusTxt}</span>
+        <span class="mb-grp-lbl">${isLive?'🔴 ':''}GROUP ${m.grp} · ${statusTxt}</span>
         <span class="mb-score-big">${m.hs} – ${m.as}</span>
       </div>
       <div class="mb-no-data">
@@ -753,7 +755,7 @@ function buildCardBack(m,h,a,c1,c2){
         <span class="mb-score-big">${m.hs} – ${m.as}</span>
       </div>
       <div class="mb-teams-lbl"><span>${h.flag} ${h.name}</span><span>${a.flag} ${a.name}</span></div>
-      ${statsHtml}
+      ${statsLoading?`<div style="font-size:.6rem;color:var(--muted);text-align:center;padding:.4rem 0"><span class="spin"></span> Loading match stats…</div>`:statsHtml}
       <div class="sc-cols">
         <div class="sc-col">${hGoals}</div>
         <div class="sc-divider"></div>
@@ -898,51 +900,89 @@ function standings(grp){
 }
 
 // ══════════════════════════════════════════════════
-//  MATCH STATISTICS — ESPN Summary endpoint
-//  Scoreboard API has no stats; summary?event=ID does
+//  MATCH STATISTICS — ESPN Summary + Boxscore endpoints
+//  with full console logging to debug field names
 // ══════════════════════════════════════════════════
 async function fetchMatchStats(espnId){
-  try{
-    const r=await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=${espnId}`);
-    if(!r.ok) return null;
-    const d=await r.json();
-    const teams=d.boxscore?.teams||[];
-    if(!teams.length) return null;
+  const BASE='https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/';
+  const endpoints=[BASE+'summary?event='+espnId, BASE+'boxscore?gameId='+espnId];
 
-    // homeAway field sometimes absent — fall back to index order (home=0, away=1)
-    const home=teams.find(t=>t.homeAway==='home')||teams[0];
-    const away=teams.find(t=>t.homeAway==='away')||teams[1];
-    if(!home||!away) return null;
+  for(const url of endpoints){
+    try{
+      const r=await fetch(url);
+      if(!r.ok){ console.warn('[Stats]',r.status,'for',url); continue; }
+      const d=await r.json();
 
-    const get=(arr,...names)=>{
-      for(const n of names){
-        const s=(arr||[]).find(x=>
-          x.name===n||x.abbreviation===n||
-          (x.displayName||'').toLowerCase()===n.toLowerCase()
-        );
-        if(s!==undefined) return parseFloat(s.value??s.displayValue??0);
-      }
-      return null;
-    };
+      // Stats might be at different paths depending on endpoint
+      const teams=d.boxscore?.teams||d.teams||d.boxScore?.teams||[];
+      console.log('[Stats]',url.includes('summary')?'summary':'boxscore',
+        '| top keys:',Object.keys(d).join(','),
+        '| teams:',teams.length,
+        '| stats count:',teams[0]?.statistics?.length??'none');
 
-    const hs=home.statistics||[];
-    const as_=away.statistics||[];
-    const stats={
-      possession:{ h:get(hs,'possessionPct','possession','Possession'), a:get(as_,'possessionPct','possession','Possession') },
-      shots:     { h:get(hs,'shots','totalShots','Shots'),              a:get(as_,'shots','totalShots','Shots') },
-      shotsOT:   { h:get(hs,'shotsOnTarget','onTargetAttempts','Shots on Target'), a:get(as_,'shotsOnTarget','onTargetAttempts','Shots on Target') },
-      saves:     { h:get(hs,'saves','goalkeeperSaves','Saves'),         a:get(as_,'saves','goalkeeperSaves','Saves') },
-      fouls:     { h:get(hs,'fouls','foulsCommitted','Fouls'),          a:get(as_,'fouls','foulsCommitted','Fouls') },
-      corners:   { h:get(hs,'cornerKicks','corners','Corner Kicks'),    a:get(as_,'cornerKicks','corners','Corner Kicks') },
-    };
-    // Only return if at least one meaningful stat is non-null and non-zero
-    const meaningful=Object.values(stats).some(s=>(s.h||0)+(s.a||0)>0);
-    return meaningful?stats:null;
-  }catch(e){
-    console.warn('[Stats] summary failed for',espnId,e.message);
-    return null;
+      if(teams.length<2) continue;
+      const home=teams.find(t=>t.homeAway==='home')||teams[0];
+      const away=teams.find(t=>t.homeAway==='away')||teams[1];
+
+      // Log ALL stat names so we can see exactly what ESPN returns
+      const statNames=(home.statistics||[]).map(s=>s.name||s.displayName).join(', ');
+      console.log('[Stats] ESPN stat field names:',statNames||'(empty array)');
+      if(home.statistics?.length) console.log('[Stats] Sample stat object:',JSON.stringify(home.statistics[0]));
+
+      const get=(arr,...names)=>{
+        for(const n of names){
+          const s=(arr||[]).find(x=>
+            x.name===n||x.abbreviation===n||
+            (x.displayName||'').toLowerCase()===n.toLowerCase()||
+            (x.label||'').toLowerCase()===n.toLowerCase()
+          );
+          if(s!==undefined){
+            const v=parseFloat(s.value??s.displayValue??0);
+            return isNaN(v)?null:v;
+          }
+        }
+        return null;
+      };
+
+      const hs=home.statistics||[];
+      const as_=away.statistics||[];
+      const stats={
+        possession:{ h:get(hs,'possessionPct','possession','Possession','ballPossessionPct','BallPossession'),
+                     a:get(as_,'possessionPct','possession','Possession','ballPossessionPct','BallPossession') },
+        shots:     { h:get(hs,'shots','totalShots','attemptedShots','Shots','shotAttempts','Total Shots'),
+                     a:get(as_,'shots','totalShots','attemptedShots','Shots','shotAttempts','Total Shots') },
+        shotsOT:   { h:get(hs,'shotsOnTarget','onTargetAttempts','shotsOnGoal','Shots on Target','ShotsOnTarget'),
+                     a:get(as_,'shotsOnTarget','onTargetAttempts','shotsOnGoal','Shots on Target','ShotsOnTarget') },
+        saves:     { h:get(hs,'saves','goalkeeperSaves','Saves','Goalkeeper Saves','GKSaves'),
+                     a:get(as_,'saves','goalkeeperSaves','Saves','Goalkeeper Saves','GKSaves') },
+        fouls:     { h:get(hs,'fouls','foulsCommitted','Fouls','Total Fouls','FoulsCommitted'),
+                     a:get(as_,'fouls','foulsCommitted','Fouls','Total Fouls','FoulsCommitted') },
+        corners:   { h:get(hs,'cornerKicks','corners','Corner Kicks','Corners','CornerKicks'),
+                     a:get(as_,'cornerKicks','corners','Corner Kicks','Corners','CornerKicks') },
+      };
+
+      console.log('[Stats] parsed values:',
+        Object.entries(stats).map(([k,v])=>k+':'+v.h+'/'+v.a).join(' | '));
+
+      const meaningful=Object.values(stats).some(s=>(s.h||0)+(s.a||0)>0);
+      if(meaningful){ console.log('[Stats] ✅ Stats found for event',espnId); return stats; }
+      console.warn('[Stats] ⚠ All stats zero/null for event',espnId,'via',url.split('?')[0].split('/').pop());
+    }catch(e){
+      console.warn('[Stats] ❌ Error:',e.message,'for',url);
+    }
   }
+  return null;
 }
+
+// Debug helper: call window.debugStats('760428') from browser console
+// to test fetching stats for any ESPN event ID
+window.debugStats=async function(espnId){
+  console.log('=== debugStats(',espnId,') ===');
+  const stats=await fetchMatchStats(espnId);
+  console.log('Result:',stats?'✅ GOT STATS':'❌ null returned');
+  if(stats) console.table(Object.entries(stats).map(([k,v])=>({stat:k,home:v.h,away:v.a})));
+  return stats;
+};
 
 // Update only the back face of a specific card when stats arrive
 // No full re-render — doesn't reset flipped state
@@ -960,17 +1000,26 @@ function updateCardBack(m){
 const _statsFetched=new Set();
 async function fetchPendingStats(){
   const GRPS=['A','B','C','D','E','F','G','H','I','J','K','L'];
-  const pending=MATCHES.filter(m=>
-    GRPS.includes(m.grp)&&(m.st==='FT'||m.st==='LIVE')&&m.espnId&&
-    !m.stats&&!_statsFetched.has(m.espnId)
-  );
+  const ftAll=MATCHES.filter(m=>GRPS.includes(m.grp)&&(m.st==='FT'||m.st==='LIVE'));
+  const noId=ftAll.filter(m=>!m.espnId);
+  const pending=ftAll.filter(m=>m.espnId&&!m.stats&&!_statsFetched.has(m.espnId));
+
+  // 🔑 KEY LOG — if espnId is missing from all FT matches, scoreboard isn't giving us IDs
+  console.log('[Stats] FT/LIVE matches:',ftAll.length,
+    '| Missing espnId:',noId.length, noId.map(m=>m.home+'v'+m.away).join(', '),
+    '| Pending stats fetch:',pending.length,
+    '| Already fetched:',_statsFetched.size);
+
   if(!pending.length) return;
   await Promise.allSettled(pending.map(async m=>{
-    _statsFetched.add(m.espnId); // Don't retry on next poll
+    _statsFetched.add(m.espnId);
+    console.log('[Stats] Fetching summary for',m.home,'v',m.away,'espnId:',m.espnId);
     const stats=await fetchMatchStats(m.espnId);
     if(stats){
       m.stats=stats;
-      updateCardBack(m); // Patch only this card's back face in-place
+      updateCardBack(m);
+    } else {
+      console.warn('[Stats] No stats returned for',m.home,'v',m.away);
     }
   }));
 }
