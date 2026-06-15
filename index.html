@@ -126,11 +126,17 @@ a{text-decoration:none;color:inherit}
 }
 .mc-clip-back{display:flex;flex-direction:column;padding:1rem 1.1rem;}
 .flip-hint{
-  position:absolute;bottom:.55rem;right:.8rem;font-size:.56rem;
-  font-weight:700;letter-spacing:.8px;color:rgba(255,255,255,.22);
-  text-transform:uppercase;pointer-events:none;
+  position:absolute;bottom:.6rem;right:.8rem;
+  font-size:.62rem;font-weight:900;letter-spacing:1.5px;
+  color:var(--gold);text-transform:uppercase;pointer-events:none;
+  text-shadow:0 0 10px rgba(255,215,0,.5);
 }
-/* Back face content */
+.mb-flip-back{
+  text-align:center;margin-top:auto;padding-top:.5rem;
+  font-size:.62rem;font-weight:900;letter-spacing:1.5px;
+  color:var(--gold);text-transform:uppercase;
+  text-shadow:0 0 10px rgba(255,215,0,.5);
+}
 .mb-header{
   display:flex;justify-content:space-between;align-items:center;
   padding-bottom:.55rem;margin-bottom:.65rem;
@@ -176,10 +182,6 @@ a{text-decoration:none;color:inherit}
   flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
   color:var(--muted);font-size:.72rem;text-align:center;gap:.3rem;opacity:.7;
 }
-.mb-flip-back{
-  text-align:center;margin-top:auto;padding-top:.35rem;
-  font-size:.55rem;color:rgba(255,255,255,.18);letter-spacing:.5px;
-}
 .spin{display:inline-block;width:10px;height:10px;border:2px solid rgba(255,215,0,.2);border-top-color:var(--gold);border-radius:50%;animation:rot .6s linear infinite;vertical-align:middle}
 @keyframes rot{to{transform:rotate(360deg)}}
 
@@ -209,7 +211,7 @@ a{text-decoration:none;color:inherit}
 .news-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem}
 .news-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column;text-decoration:none;color:inherit;transition:transform .2s,border-color .2s}
 .news-card:hover{transform:translateY(-3px);border-color:rgba(255,215,0,.3)}
-.news-thumb{height:118px;background-size:cover;background-position:center;background-color:var(--surface);display:flex;align-items:center;justify-content:center;font-size:2.5rem;color:rgba(255,255,255,.08);flex-shrink:0}
+.news-thumb{aspect-ratio:16/9;min-height:110px;background-size:cover;background-position:center;background-color:var(--surface);display:flex;align-items:center;justify-content:center;font-size:2.5rem;color:rgba(255,255,255,.08);flex-shrink:0}
 .news-body{padding:.85rem 1rem;display:flex;flex-direction:column;gap:.32rem;flex:1}
 .news-meta{font-size:.62rem;font-weight:700;letter-spacing:.5px;text-transform:uppercase;display:flex;align-items:center;gap:.4rem}
 .news-src{color:var(--gold)}.news-ago{color:var(--muted)}
@@ -587,7 +589,7 @@ function buildCardFront(m,h,a,c1,c2){
       </div>
       <div class="mc-foot"><span class="time">${fmtIST(m.utc)}</span><span>📍 ${m.venue.split(',')[0]}</span></div>
     </div>
-    <div class="flip-hint">↻ Scorers &amp; cards</div>
+    <div class="flip-hint">TAP TO FLIP</div>
   </div>`;
 }
 
@@ -596,6 +598,11 @@ function buildCardBack(m,h,a,c1,c2){
   const cards=m.cards||[];
   const hasData=sc.home.length||sc.away.length||cards.length;
   const backBg=`linear-gradient(135deg,${c1}18 0%,${c2}18 100%),var(--card)`;
+  const isLive=m.st==='LIVE';
+  const statusLabel=isLive
+    ?`<span class="mb-title live" style="color:var(--red)">GROUP ${m.grp} · ${m.clock||'LIVE'} 🔴</span>`
+    :`<span class="mb-title">GROUP ${m.grp} · FULL TIME</span>`;
+  const noDataMsg=isLive?'Scorer data updates every 30s':'Updates after next ESPN sync';
 
   function goalRow(s){
     return `<div class="mb-goal">
@@ -608,14 +615,14 @@ function buildCardBack(m,h,a,c1,c2){
   if(!hasData){
     inner=`
       <div class="mb-header">
-        <span class="mb-title">GROUP ${m.grp} · FULL TIME</span>
+        ${statusLabel}
         <span class="mb-score">${m.hs} – ${m.as}</span>
       </div>
       <div class="mb-no-data">
         <div>Scorer data not yet available</div>
-        <div style="font-size:.6rem;margin-top:.3rem;color:var(--muted)">Updates after next ESPN sync</div>
+        <div style="font-size:.6rem;margin-top:.3rem;color:var(--muted)">${noDataMsg}</div>
       </div>
-      <div class="mb-flip-back">↻ tap to flip back</div>`;
+      <div class="mb-flip-back">TAP TO FLIP</div>`;
   } else {
     const homeGoals=sc.home.length?sc.home.map(goalRow).join(''):`<div class="mb-no-goals">–</div>`;
     const awayGoals=sc.away.length?sc.away.map(goalRow).join(''):`<div class="mb-no-goals">–</div>`;
@@ -626,7 +633,7 @@ function buildCardBack(m,h,a,c1,c2){
       </div>`:'';
     inner=`
       <div class="mb-header">
-        <span class="mb-title">GROUP ${m.grp} · FULL TIME</span>
+        ${statusLabel}
         <span class="mb-score">${m.hs} – ${m.as}</span>
       </div>
       <div class="mb-teams">
@@ -635,7 +642,7 @@ function buildCardBack(m,h,a,c1,c2){
         <div class="mb-team away"><div class="mb-team-name">${a.flag} ${a.name}</div>${awayGoals}</div>
       </div>
       ${cardsHtml}
-      <div class="mb-flip-back">↻ tap to flip back</div>`;
+      <div class="mb-flip-back">TAP TO FLIP</div>`;
   }
   return `<div class="mc-clip mc-clip-back" style="background:${backBg}">${inner}</div>`;
 }
@@ -699,7 +706,7 @@ function buildNSCardBack(m,h,a,c1,c2){
       ${hPlayers.map(p=>prow(p,h.flag)).join('')}
       ${aPlayers.map(p=>prow(p,a.flag)).join('')}
     </div>
-    <div class="mb-flip-back">↻ tap to flip back</div>
+    <div class="mb-flip-back">TAP TO FLIP</div>
   </div>`;
 }
 
@@ -708,7 +715,8 @@ function buildCard(m){
   const c1=h.colors[0],c2=a.colors[0];
   const grad=`linear-gradient(135deg,${c1} 0%,${c1} 40%,${c2} 60%,${c2} 100%)`;
 
-  if(m.st==='FT'){
+  if(m.st==='FT'||m.st==='LIVE'){
+    // Both FT and LIVE get flip card: front = score/time, back = scorers & cards
     return `<div class="mc-flip" style="height:248px;" onclick="flipCard(this)">
       <div class="mc-inner">
         <div class="mc-face">${buildCardFront(m,h,a,c1,c2)}</div>
@@ -733,7 +741,7 @@ function buildCard(m){
         </div>
         <div class="mc-foot"><span class="time">${fmtIST(m.utc)}</span><span>📍 ${m.venue.split(',')[0]}</span></div>
       </div>
-      <div class="flip-hint">↻ Preview</div>
+      <div class="flip-hint">TAP TO FLIP</div>
     </div>`;
     return `<div class="mc-flip" style="height:272px;" onclick="flipCard(this)">
       <div class="mc-inner">
@@ -743,14 +751,12 @@ function buildCard(m){
     </div>`;
   }
 
-  // LIVE — plain card, no flip
+  // LIVE — handled above with FT (both flip)
+  // Fallback: plain card (shouldn't reach here)
   return `<div class="mc" style="--mc-grad:${grad}">
     <div class="mc-bg"></div><div class="mc-dark"></div>
     <div class="mc-body">
-      <div class="mc-top">
-        <span class="mc-grp">GROUP ${m.grp}</span>
-        <span class="mc-st live">${m.clock?m.clock+' 🔴':'🔴 Live'}</span>
-      </div>
+      <div class="mc-top"><span class="mc-grp">GROUP ${m.grp}</span><span class="mc-st live">${m.clock?m.clock+' 🔴':'🔴 Live'}</span></div>
       <div class="mc-teams">
         <div class="mc-team"><div class="mc-flag">${h.flag}</div><div class="mc-nm"><a href="team.html?team=${m.home}">${h.name}</a></div></div>
         <div class="mc-mid"><div class="mc-score">${m.hs}<span class="s"> – </span>${m.as}</div></div>
