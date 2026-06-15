@@ -530,6 +530,8 @@ function patchMatches(live){
     const m=MATCHES.find(m=>GROUPS.includes(m.grp)&&m.home===r.home&&m.away===r.away);
     if(!m) return;
     if(m.st!==r.st||m.hs!==r.hs||m.as!==r.as){
+      // If match just ended, clear stats cache so summary gets re-fetched with final data
+      if(r.st==='FT'&&m.st!=='FT'&&m.espnId) _statsFetched.delete(m.espnId);
       m.st=r.st; m.hs=r.hs; m.as=r.as; changed=true;
     }
     if(r.clock!==undefined) m.clock=r.clock;
@@ -833,7 +835,7 @@ function buildCard(m){
 
   if(m.st==='FT'||m.st==='LIVE'){
     // Both FT and LIVE get flip card: front = score/time, back = stats + scorers
-    return `<div class="mc-flip" style="height:300px;" onclick="flipCard(this)">
+    return `<div class="mc-flip" data-mid="${m.id}" style="height:300px;" onclick="flipCard(this)">
       <div class="mc-inner">
         <div class="mc-face">${buildCardFront(m,h,a,c1,c2)}</div>
         <div class="mc-face mc-back">${buildCardBack(m,h,a,c1,c2)}</div>
@@ -942,19 +944,34 @@ async function fetchMatchStats(espnId){
   }
 }
 
+// Update only the back face of a specific card when stats arrive
+// No full re-render — doesn't reset flipped state
+function updateCardBack(m){
+  const card=document.querySelector(`.mc-flip[data-mid="${m.id}"]`);
+  if(!card) return;
+  const back=card.querySelector('.mc-back');
+  if(!back) return;
+  const h=TEAMS[m.home],a=TEAMS[m.away];
+  const c1=h.colors[0],c2=a.colors[0];
+  back.innerHTML=buildCardBack(m,h,a,c1,c2);
+}
+
 // After each ESPN poll, fetch summary stats for FT matches that don't have them yet
 const _statsFetched=new Set();
 async function fetchPendingStats(){
   const GRPS=['A','B','C','D','E','F','G','H','I','J','K','L'];
   const pending=MATCHES.filter(m=>
-    GRPS.includes(m.grp)&&m.st==='FT'&&m.espnId&&
+    GRPS.includes(m.grp)&&(m.st==='FT'||m.st==='LIVE')&&m.espnId&&
     !m.stats&&!_statsFetched.has(m.espnId)
   );
   if(!pending.length) return;
   await Promise.allSettled(pending.map(async m=>{
-    _statsFetched.add(m.espnId); // mark so we don't retry on every poll
+    _statsFetched.add(m.espnId); // Don't retry on next poll
     const stats=await fetchMatchStats(m.espnId);
-    if(stats) m.stats=stats;
+    if(stats){
+      m.stats=stats;
+      updateCardBack(m); // Patch only this card's back face in-place
+    }
   }));
 }
 
@@ -978,8 +995,11 @@ async function fetchTopScorer(){
 function computeAndRenderStats(){
   const GRPS=['A','B','C','D','E','F','G','H','I','J','K','L'];
   const ft=MATCHES.filter(m=>GRPS.includes(m.grp)&&m.st==='FT');
-  const goals=ft.reduce((s,m)=>s+(m.hs||0)+(m.as||0),0);
-  const played=ft.length;
+  // Include live match goals so counter updates in real-time during matches
+  const live=MATCHES.filter(m=>GRPS.includes(m.grp)&&m.st==='LIVE');
+  const goals=ft.reduce((s,m)=>s+(m.hs||0)+(m.as||0),0)
+             +live.reduce((s,m)=>s+(m.hs||0)+(m.as||0),0);
+  const played=ft.length; // "played" = completed only
   const avg=played>0?(goals/played).toFixed(1):'–';
 
   // Cards from ESPN-populated match data
@@ -1014,7 +1034,8 @@ function renderAll(){
 
   // Today window — current IST calendar day
   const tS=istMidnight(0).getTime(),tE=istMidnight(1).getTime();
-  let today=gm.filter(m=>m.st==='NS'&&new Date(m.utc).getTime()>nowMs-3*3600*1000&&new Date(m.utc)>=tS&&new Date(m.utc)<tE);
+  let today=gm.filter(m=>m.st==='NS'&&new Date(m.utc).getTime()>nowMs-3*3600*1000&&new Date(m.utc)>=tS&&new Date(m.utc)<tE)
+    .sort((a,b)=>new Date(a.utc)-new Date(b.utc)); // earliest kickoff first
   let upcomingLabel='TODAY\'S MATCHES';
 
   // No NS matches today — find ALL matches on the next upcoming IST day (no 4-cap)
@@ -1027,7 +1048,7 @@ function renderAll(){
     });
     const nextKey=Object.keys(nsGrouped).sort()[0];
     if(nextKey){
-      today=nsGrouped[nextKey];
+      today=nsGrouped[nextKey].sort((a,b)=>new Date(a.utc)-new Date(b.utc)); // earliest first
       // Label: "TOMORROW'S MATCHES" if next day, otherwise the date
       const nextIST=toIST(today[0].utc);
       const tomorrowIST=new Date(tS+86400000*2); // midnight + 1 day
@@ -1325,6 +1346,7 @@ async function initNews(){
 // ── KICK IT OFF ───────────────────────────────────
 renderAll();
 poll();
+fetchPendingStats(); // fetch stats for any FT matches already in static data
 initNews();
 </script>
 </body>
