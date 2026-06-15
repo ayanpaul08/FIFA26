@@ -498,7 +498,7 @@ function parseEvents(data){
                     a:parseStat(aStats,'cornerKicks')||parseStat(aStats,'corners') },
       offsides:   { h:parseStat(hStats,'offsides'), a:parseStat(aStats,'offsides') },
     };
-    const hasStats=Object.values(stats).some(s=>s.h!==null||s.a!==null);
+    const hasStats=Object.values(stats).some(s=>(s.h||0)+(s.a||0)>0); // zero = not meaningful
 
     return [{home:hId,away:aId,
       hs:state!=='pre'?parseInt(hc.score||0):null,
@@ -537,7 +537,11 @@ function patchMatches(live){
     if(r.clock!==undefined) m.clock=r.clock;
     if(r.scorers&&(r.scorers.home.length||r.scorers.away.length)) m.scorers=r.scorers;
     if(r.cards&&r.cards.length) m.cards=r.cards;
-    if(r.stats) m.stats=r.stats;
+    if(r.stats){
+      // Only store stats that have non-zero values — zeros block the summary fetch
+      const meaningful=Object.values(r.stats).some(s=>(s.h||0)+(s.a||0)>0);
+      if(meaningful) m.stats=r.stats;
+    }
     if(r.espnId&&!m.espnId) m.espnId=r.espnId;
   });
   return changed;
@@ -1024,21 +1028,29 @@ async function fetchPendingStats(){
   }));
 }
 
+
 // ══════════════════════════════════════════════════
 //  LIVE TOURNAMENT STATS
 // ══════════════════════════════════════════════════
-async function fetchTopScorer(){
-  try{
-    const r=await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/leaders');
-    if(!r.ok) return null;
-    const d=await r.json();
-    const cat=(d.categories||d.leaders||[]).find(c=>(c.name||c.displayName||'').toLowerCase().includes('scor'));
-    const leader=cat?.leaders?.[0]||cat?.athletes?.[0];
-    if(!leader) return null;
-    const name=leader.athlete?.shortName||leader.athlete?.displayName||leader.displayName||'';
-    const goals=Math.round(leader.value||0);
-    return goals>0?`${name} (${goals})`  :null;
-  }catch(e){ return null; }
+
+// Compute top scorer from match detail data (scorers populated by ESPN summary fetches)
+function getTopScorer(){
+  const tally={};
+  MATCHES.forEach(m=>{
+    if(!m.scorers) return;
+    const allGoals=[
+      ...m.scorers.home.filter(s=>!s.og).map(s=>({...s,team:TEAMS[m.home]?.name})),
+      ...m.scorers.away.filter(s=>!s.og).map(s=>({...s,team:TEAMS[m.away]?.name})),
+    ];
+    allGoals.forEach(s=>{
+      if(!s.player) return;
+      tally[s.player]=(tally[s.player]||0)+1;
+    });
+  });
+  const sorted=Object.entries(tally).sort((a,b)=>b[1]-a[1]);
+  if(!sorted.length) return '–';
+  const [name,goals]=sorted[0];
+  return `${name.split(' ').pop()} (${goals})`;
 }
 
 function computeAndRenderStats(){
@@ -1062,11 +1074,7 @@ function computeAndRenderStats(){
   set('st-avg',    avg);
   set('st-yellow', yellow||'–');
   set('st-red',    red||'–');
-
-  // Top scorer — async, update when ready
-  fetchTopScorer().then(ts=>{
-    set('st-top', ts||'–');
-  });
+  set('st-top',    getTopScorer());
 }
 
 function renderAll(){
@@ -1337,18 +1345,16 @@ async function fetchRSSFeed(feedUrl,src){
   return[];
 }
 
-// ── Merge all tiers ───────────────────────────────
+// ── Merge all tiers — Reddit removed (CORS blocked from github.io) ──
 async function fetchAllNews(){
-  const [rSoccer,rWC,espnGen,espnWC,bbc,guardian]=await Promise.all([
-    raceTimeout(fetchReddit('soccer'),    8000).catch(()=>[]),
-    raceTimeout(fetchReddit('WorldCup'),  8000).catch(()=>[]),
+  const [espnGen,espnWC,bbc,guardian]=await Promise.all([
     raceTimeout(fetchESPNNews(),          8000).catch(()=>[]),
     raceTimeout(fetchESPNNews('fifa.world'),8000).catch(()=>[]),
     raceTimeout(fetchRSSFeed('https://feeds.bbci.co.uk/sport/football/rss.xml','BBC Sport'),12000).catch(()=>[]),
     raceTimeout(fetchRSSFeed('https://www.theguardian.com/football/rss','The Guardian'),12000).catch(()=>[]),
   ]);
-  console.log(`[News] r/soccer:${rSoccer.length} r/WC:${rWC.length} ESPN:${espnGen.length+espnWC.length} BBC:${bbc.length} Guardian:${guardian.length}`);
-  const all=[...rSoccer,...rWC,...espnGen,...espnWC,...bbc,...guardian];
+  console.log(`[News] ESPN:${espnGen.length+espnWC.length} BBC:${bbc.length} Guardian:${guardian.length}`);
+  const all=[...espnGen,...espnWC,...bbc,...guardian];
   const seen=new Set();
   return all
     .filter(n=>{
