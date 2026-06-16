@@ -84,6 +84,16 @@ a{text-decoration:none;color:inherit}
 .stat-chip .si{font-size:1rem;display:block;margin-bottom:.15rem}
 @media(max-width:900px){.stats-strip{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:480px){.stats-strip{grid-template-columns:repeat(2,1fr);padding:.8rem 1rem 0}}
+/* Award chips (Golden Boot / Glove) */
+.award-chip{text-align:left!important}
+.aw-list{display:flex;flex-direction:column;gap:.18rem;margin:.1rem 0;width:100%}
+.aw-row{display:flex;align-items:center;gap:.3rem;font-size:.6rem;line-height:1.3}
+.aw-rank{color:var(--muted);font-size:.52rem;min-width:10px;flex-shrink:0}
+.aw-n{flex:1;color:rgba(255,255,255,.88);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aw-cnt{color:var(--gold);font-weight:900;font-family:'Orbitron',monospace;font-size:.58rem;flex-shrink:0}
+.aw-sv{color:var(--gold);font-weight:800;font-size:.56rem;flex-shrink:0}
+.aw-cs{color:var(--green);font-weight:800;font-size:.56rem;flex-shrink:0}
+.aw-ctry{color:var(--muted);font-size:.52rem;flex-shrink:0;min-width:22px;text-align:right}
 .pill{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:30px;padding:.35rem 1rem;font-size:.75rem;font-weight:700;color:rgba(255,255,255,.6);letter-spacing:.5px}
 .pill strong{color:var(--gold)}
 
@@ -349,12 +359,12 @@ a{text-decoration:none;color:inherit}
 
 <!-- LIVE TOURNAMENT STATS -->
 <div class="stats-strip" id="stats-strip">
-  <div class="stat-chip"><span class="si">⚽</span><span class="sv" id="st-goals">–</span><span class="sl">Goals Scored</span></div>
-  <div class="stat-chip"><span class="si">📊</span><span class="sv" id="st-played">–</span><span class="sl">Matches Played</span></div>
-  <div class="stat-chip"><span class="si">🎯</span><span class="sv" id="st-avg">–</span><span class="sl">Goals / Game</span></div>
-  <div class="stat-chip"><span class="si">🟡</span><span class="sv" id="st-yellow">–</span><span class="sl">Yellow Cards</span></div>
-  <div class="stat-chip"><span class="si">🔴</span><span class="sv" id="st-red">–</span><span class="sl">Red Cards</span></div>
-  <div class="stat-chip"><span class="si">🏅</span><span class="sv small" id="st-top">–</span><span class="sl">Top Scorer</span></div>
+  <div class="stat-chip"><span class="sv" id="st-goals">–</span><span class="sl">Goals Scored</span></div>
+  <div class="stat-chip"><span class="sv" id="st-played">–</span><span class="sl">Matches Played</span></div>
+  <div class="stat-chip"><span class="sv" id="st-yellow">–</span><span class="sl">Yellow Cards</span></div>
+  <div class="stat-chip"><span class="sv" id="st-red">–</span><span class="sl">Red Cards</span></div>
+  <div class="stat-chip award-chip"><div class="aw-list" id="st-boot"><div class="aw-row"><span class="aw-n">–</span></div></div><span class="sl">Golden Boot</span></div>
+  <div class="stat-chip award-chip"><div class="aw-list" id="st-glove"><div class="aw-row"><span class="aw-n">–</span></div></div><span class="sl">Golden Glove</span></div>
 </div>
 
 <div class="wrap">
@@ -978,6 +988,11 @@ async function fetchMatchStats(espnId){
                      a:get(as_,'fouls','foulsCommitted','Fouls','Total Fouls','FoulsCommitted') },
         corners:   { h:get(hs,'cornerKicks','corners','Corner Kicks','Corners','CornerKicks'),
                      a:get(as_,'cornerKicks','corners','Corner Kicks','Corners','CornerKicks') },
+        // Card totals — used as fallback for matches outside the scoreboard window
+        yellowCards:{ h:get(hs,'yellowCards','Yellow Cards','Cautions','cautions'),
+                      a:get(as_,'yellowCards','Yellow Cards','Cautions','cautions') },
+        redCards:   { h:get(hs,'redCards','Red Cards','Ejections','ejections'),
+                      a:get(as_,'redCards','Red Cards','Ejections','ejections') },
       };
 
       console.log('[Stats] parsed values:',
@@ -1044,52 +1059,131 @@ async function fetchPendingStats(){
 }
 
 
+// FIFA 3-letter country codes for all 48 teams
+const FIFA_CODE={
+  argentina:'ARG',brazil:'BRA',france:'FRA',england:'ENG',germany:'GER',
+  spain:'ESP',portugal:'POR',netherlands:'NED',norway:'NOR',south_korea:'KOR',
+  mexico:'MEX',belgium:'BEL',morocco:'MAR',japan:'JPN',usa:'USA',uruguay:'URU',
+  senegal:'SEN',czechia:'CZE',canada:'CAN',bosnia:'BIH',qatar:'QAT',
+  switzerland:'SUI',haiti:'HAI',scotland:'SCO',paraguay:'PAR',australia:'AUS',
+  turkiye:'TUR',curacao:'CUW',ivory_coast:'CIV',ecuador:'ECU',sweden:'SWE',
+  tunisia:'TUN',egypt:'EGY',iran:'IRN',new_zealand:'NZL',cape_verde:'CPV',
+  saudi_arabia:'KSA',iraq:'IRQ',algeria:'ALG',austria:'AUT',jordan:'JOR',
+  dr_congo:'COD',uzbekistan:'UZB',colombia:'COL',croatia:'CRO',ghana:'GHA',
+  panama:'PAN',south_africa:'RSA',georgia:'GEO'
+};
+
+// Golden Boot — top 3 scorers from match scorer data
+function getTopScorers(){
+  const tally={};
+  const GRPS=['A','B','C','D','E','F','G','H','I','J','K','L'];
+  MATCHES.filter(m=>GRPS.includes(m.grp)&&m.st==='FT').forEach(m=>{
+    if(!m.scorers) return;
+    m.scorers.home.filter(s=>!s.og&&s.player).forEach(s=>{
+      if(!tally[s.player]) tally[s.player]={g:0,tid:m.home};
+      tally[s.player].g++;
+    });
+    m.scorers.away.filter(s=>!s.og&&s.player).forEach(s=>{
+      if(!tally[s.player]) tally[s.player]={g:0,tid:m.away};
+      tally[s.player].g++;
+    });
+  });
+  return Object.entries(tally)
+    .sort((a,b)=>b[1].g-a[1].g).slice(0,3)
+    .map(([name,{g,tid}])=>({
+      name: name.split(' ').pop(),
+      count: g,
+      ctry: FIFA_CODE[tid]||tid.slice(0,3).toUpperCase()
+    }));
+}
+
+// Golden Glove — saves + clean sheets (sorted: CS desc, then saves desc)
+function getTopSavers(){
+  const tally={};
+  const GRPS=['A','B','C','D','E','F','G','H','I','J','K','L'];
+  MATCHES.filter(m=>GRPS.includes(m.grp)&&m.st==='FT').forEach(m=>{
+    const hGK=(PLAYERS[m.home]||[]).find(p=>p.p==='GK');
+    const aGK=(PLAYERS[m.away]||[]).find(p=>p.p==='GK');
+    if(hGK){
+      if(!tally[hGK.n]) tally[hGK.n]={sv:0,cs:0,gp:0,tid:m.home};
+      tally[hGK.n].gp++;
+      if(m.stats?.saves?.h>0) tally[hGK.n].sv+=m.stats.saves.h;
+      if((m.as||99)===0) tally[hGK.n].cs++;  // home didn't concede = home GK clean sheet
+    }
+    if(aGK){
+      if(!tally[aGK.n]) tally[aGK.n]={sv:0,cs:0,gp:0,tid:m.away};
+      tally[aGK.n].gp++;
+      if(m.stats?.saves?.a>0) tally[aGK.n].sv+=m.stats.saves.a;
+      if((m.hs||99)===0) tally[aGK.n].cs++;  // away didn't concede = away GK clean sheet
+    }
+  });
+  return Object.entries(tally)
+    .filter(([,v])=>v.gp>0)
+    .sort((a,b)=>b[1].cs-a[1].cs||b[1].sv-a[1].sv)  // CS first, saves as tiebreaker
+    .slice(0,3)
+    .map(([name,{sv,cs,tid}])=>({
+      name: name.split(' ').pop(),
+      sv, cs,
+      ctry: FIFA_CODE[tid]||tid.slice(0,3).toUpperCase()
+    }));
+}
+
+function renderAwardChip(elId, entries, type){
+  const el=document.getElementById(elId);
+  if(!el) return;
+  if(!entries.length){
+    el.innerHTML='<div class="aw-row"><span class="aw-n" style="color:var(--muted)">No data yet</span></div>';
+    return;
+  }
+  if(type==='glove'){
+    el.innerHTML=entries.map((e,i)=>`<div class="aw-row">
+      <span class="aw-rank">${i+1}</span>
+      <span class="aw-n">${e.name}</span>
+      <span class="aw-sv">${e.sv}sv</span>
+      <span class="aw-cs">${e.cs}cs</span>
+      <span class="aw-ctry">${e.ctry}</span>
+    </div>`).join('');
+  } else {
+    el.innerHTML=entries.map((e,i)=>`<div class="aw-row">
+      <span class="aw-rank">${i+1}</span>
+      <span class="aw-n">${e.name}</span>
+      <span class="aw-cnt">${e.count}</span>
+      <span class="aw-ctry">${e.ctry}</span>
+    </div>`).join('');
+  }
+}
+
 // ══════════════════════════════════════════════════
 //  LIVE TOURNAMENT STATS
 // ══════════════════════════════════════════════════
-
-// Compute top scorer from match detail data (scorers populated by ESPN summary fetches)
-function getTopScorer(){
-  const tally={};
-  MATCHES.forEach(m=>{
-    if(!m.scorers) return;
-    const allGoals=[
-      ...m.scorers.home.filter(s=>!s.og).map(s=>({...s,team:TEAMS[m.home]?.name})),
-      ...m.scorers.away.filter(s=>!s.og).map(s=>({...s,team:TEAMS[m.away]?.name})),
-    ];
-    allGoals.forEach(s=>{
-      if(!s.player) return;
-      tally[s.player]=(tally[s.player]||0)+1;
-    });
-  });
-  const sorted=Object.entries(tally).sort((a,b)=>b[1]-a[1]);
-  if(!sorted.length) return '–';
-  const [name,goals]=sorted[0];
-  return `${name.split(' ').pop()} (${goals})`;
-}
-
 function computeAndRenderStats(){
   const GRPS=['A','B','C','D','E','F','G','H','I','J','K','L'];
   const ft=MATCHES.filter(m=>GRPS.includes(m.grp)&&m.st==='FT');
-  // Include live match goals so counter updates in real-time during matches
   const live=MATCHES.filter(m=>GRPS.includes(m.grp)&&m.st==='LIVE');
   const goals=ft.reduce((s,m)=>s+(m.hs||0)+(m.as||0),0)
              +live.reduce((s,m)=>s+(m.hs||0)+(m.as||0),0);
-  const played=ft.length; // "played" = completed only
-  const avg=played>0?(goals/played).toFixed(1):'–';
+  const played=ft.length;
 
-  // Cards from ESPN-populated match data
-  const allCards=MATCHES.filter(m=>m.cards?.length).flatMap(m=>m.cards||[]);
-  const yellow=allCards.filter(c=>c.color==='yellow').length;
-  const red   =allCards.filter(c=>c.color==='red').length;
+  // Cards — dual source: m.cards (recent scoreboard) + m.stats card totals (summary, all FT)
+  let yellow=0, red=0;
+  ft.forEach(m=>{
+    if(m.cards?.length){
+      yellow+=m.cards.filter(c=>c.color==='yellow').length;
+      red   +=m.cards.filter(c=>c.color==='red').length;
+    } else if(m.stats){
+      yellow+=(m.stats.yellowCards?.h||0)+(m.stats.yellowCards?.a||0);
+      red   +=(m.stats.redCards?.h||0)+(m.stats.redCards?.a||0);
+    }
+  });
 
   const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
   set('st-goals',  goals||'–');
   set('st-played', played?`${played}/72`:'–');
-  set('st-avg',    avg);
   set('st-yellow', yellow||'–');
   set('st-red',    red||'–');
-  set('st-top',    getTopScorer());
+
+  renderAwardChip('st-boot',  getTopScorers(), 'boot');
+  renderAwardChip('st-glove', getTopSavers(),  'glove');
 }
 
 function renderAll(){
