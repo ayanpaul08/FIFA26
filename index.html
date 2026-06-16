@@ -352,7 +352,7 @@ a{text-decoration:none;color:inherit}
   <div class="hero-eye">India's Home for the Beautiful Game</div>
   <h1 class="hero-title"><span class="l1">FIFA World Cup</span></h1>
   <div class="hero-year">2026</div>
-  <p class="hero-sub">USA · Canada · Mexico &nbsp;|&nbsp; 11 June – 19 July 2026 &nbsp;|&nbsp; All times in IST</p>
+  <p class="hero-sub">USA · Canada · Mexico &nbsp;|&nbsp; 11 June – 19 July 2026 &nbsp;|&nbsp; All times in <span id="tz-label">your local time</span></p>
 </div>
 
 <!-- LIVE TOURNAMENT STATS -->
@@ -385,7 +385,7 @@ a{text-decoration:none;color:inherit}
 </div>
 
 <div class="footer">
-  <p>Results powered by <strong>ESPN</strong> · Auto-refreshing · All times IST</p>
+  <p>Results powered by <strong>ESPN</strong> · Auto-refreshing · All times in <span id="tz-label-footer"></span></p>
   <p style="margin-top:.4rem"><a href="schedule.html">Full Schedule →</a></p>
 </div>
 
@@ -560,15 +560,9 @@ function nextInterval(){
   const now=Date.now();
   const soonNS=gm.some(m=>m.st==='NS'&&Math.abs(new Date(m.utc)-now)<3*3600_000);
   if(soonNS)                               return 60_000;   // 1min — kickoff within 3h
-  const todayNS=gm.some(m=>m.st==='NS'&&isTodayIST(m.utc));
+  const todayNS=gm.some(m=>m.st==='NS'&&localDateKey(m.utc)===todayKey());
   if(todayNS)                              return 3*60_000; // 3min — matches today
   return 15*60_000;                                         // 15min — quiet period
-}
-function isTodayIST(u){
-  const IST=5.5*3600000;
-  const ni=new Date(new Date().getTime()+IST);
-  const mi=new Date(new Date(u).getTime()+IST);
-  return ni.toDateString()===mi.toDateString();
 }
 
 // ── Status bar helpers ────────────────────────────
@@ -613,10 +607,33 @@ function startNextCountdown(ms){
 }
 
 // ── RENDERING ─────────────────────────────────────
-const IST=5.5*3600000;
-function toIST(u){return new Date(new Date(u).getTime()+IST)}
-function fmtIST(u){return toIST(u).toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'UTC'})+' IST'}
-function fmtTime(u){return toIST(u).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'UTC'})}
+// ── Auto-detected local timezone ─────────────────
+const USER_TZ=Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+function getTZLabel(){
+  // Returns short timezone name e.g. "IST", "EDT", "BST", "CET"
+  return new Date().toLocaleTimeString('en-US',{timeZoneName:'short',timeZone:USER_TZ}).split(' ').pop();
+}
+// Local date key in user's timezone: "2026-06-14"
+function localDateKey(u){
+  return new Date(u).toLocaleDateString('en-CA',{timeZone:USER_TZ});
+}
+// Today's local date key
+function todayKey(){return localDateKey(new Date());}
+// Tomorrow's local date key
+function tomorrowKey(){return localDateKey(new Date(Date.now()+86400000));}
+
+// Format just the time in user's local timezone
+function fmtTime(u){
+  return new Date(u).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true,timeZone:USER_TZ});
+}
+// Format full date + time in user's local timezone for match card footer
+function fmtIST(u){
+  const d=new Date(u);
+  const date=d.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',timeZone:USER_TZ});
+  const time=d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true,timeZone:USER_TZ});
+  return `${date}, ${time} ${getTZLabel()}`;
+}
 
 function cdObj(u){const d=new Date(u)-new Date();if(d<=0)return null;return{D:Math.floor(d/86400000),H:Math.floor(d%86400000/3600000),M:Math.floor(d%3600000/60000),S:Math.floor(d%60000/1000)}}
 function startCD(el,u){const go=()=>{const c=cdObj(u);if(!c){el.innerHTML='<span class="cd-live" style="font-size:.7rem;letter-spacing:1px;opacity:.6">Updating…</span>';return}el.innerHTML=`<div class="cdu"><span class="cdn">${String(c.D).padStart(2,'0')}</span><span class="cdl">D</span></div><span class="cdd">:</span><div class="cdu"><span class="cdn">${String(c.H).padStart(2,'0')}</span><span class="cdl">H</span></div><span class="cdd">:</span><div class="cdu"><span class="cdn">${String(c.M).padStart(2,'0')}</span><span class="cdl">M</span></div><span class="cdd">:</span><div class="cdu"><span class="cdn">${String(c.S).padStart(2,'0')}</span><span class="cdl">S</span></div>`};go();return setInterval(go,1000)}
@@ -677,7 +694,7 @@ window.flipCard=function(el){
 
 function buildCardFront(m,h,a,c1,c2){
   const isFT=m.st==='FT',isNS=m.st==='NS',isLive=m.st==='LIVE';
-  const stTxt=isFT?'Full Time':isLive?(m.clock?m.clock+' 🔴':'🔴 Live'):fmtTime(m.utc)+' IST';
+  const stTxt=isFT?'Full Time':isLive?(m.clock?m.clock+' 🔴':'🔴 Live'):fmtTime(m.utc)+' '+getTZLabel();
   const stCls=isFT?'ft':isLive?'live':'';
   const scoreHtml=isFT||isLive
     ?`<div class="mc-score">${m.hs}<span class="s"> – </span>${m.as}</div>`
@@ -1133,14 +1150,14 @@ function computeAndRenderStats(){
              +live.reduce((s,m)=>s+(m.hs||0)+(m.as||0),0);
   const played=ft.length;
 
-  // Cards — dual source: m.cards (recent scoreboard) + m.stats card totals (summary plays scan)
+  // Cards — count from ALL group matches with card data (FT + LIVE)
+  // This was the original working approach; restricting to ft[] broke red card detection
   let yellow=0, red=0;
-  ft.forEach(m=>{
+  MATCHES.filter(m=>GRPS.includes(m.grp)).forEach(m=>{
     if(m.cards?.length){
       yellow+=m.cards.filter(c=>c.color==='yellow').length;
       red   +=m.cards.filter(c=>c.color==='red').length;
-    } else if(m.stats){
-      // .total comes from d.plays scan in fetchMatchStats; .h/.a from boxscore (fallback)
+    } else if(m.st==='FT'&&m.stats){
       yellow+=m.stats.yellowCards?.total??((m.stats.yellowCards?.h||0)+(m.stats.yellowCards?.a||0));
       red   +=m.stats.redCards?.total   ??((m.stats.redCards?.h||0)+(m.stats.redCards?.a||0));
     }
@@ -1174,30 +1191,26 @@ function renderAll(){
   const nowMs=Date.now();
   const ns=gm.filter(m=>m.st==='NS'&&new Date(m.utc).getTime()>nowMs-3*3600*1000);
 
-  // Today window — current IST calendar day
-  const tS=istMidnight(0).getTime(),tE=istMidnight(1).getTime();
-  let today=gm.filter(m=>m.st==='NS'&&new Date(m.utc).getTime()>nowMs-3*3600*1000&&new Date(m.utc)>=tS&&new Date(m.utc)<tE)
-    .sort((a,b)=>new Date(a.utc)-new Date(b.utc)); // earliest kickoff first
+  // Today window — current calendar day in user's local timezone
+  const todayLocalKey=todayKey();
+  let today=gm.filter(m=>m.st==='NS'&&new Date(m.utc).getTime()>nowMs-3*3600*1000&&localDateKey(m.utc)===todayLocalKey)
+    .sort((a,b)=>new Date(a.utc)-new Date(b.utc));
   let upcomingLabel='TODAY\'S MATCHES';
 
-  // No NS matches today — find ALL matches on the next upcoming IST day (no 4-cap)
+  // No NS matches today — find ALL matches on the next upcoming local day
   if(!today.length && ns.length){
     const nsGrouped={};
     [...ns].sort((a,b)=>new Date(a.utc)-new Date(b.utc)).forEach(m=>{
-      const d=toIST(m.utc);
-      const k=`${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+      const k=localDateKey(m.utc);
       (nsGrouped[k]=nsGrouped[k]||[]).push(m);
     });
     const nextKey=Object.keys(nsGrouped).sort()[0];
     if(nextKey){
-      today=nsGrouped[nextKey].sort((a,b)=>new Date(a.utc)-new Date(b.utc)); // earliest first
-      // Label: "TOMORROW'S MATCHES" if next day, otherwise the date
-      const nextIST=toIST(today[0].utc);
-      const tomorrowIST=new Date(tS+86400000*2); // midnight + 1 day
-      const isTomorrow=nextIST.getTime()<tomorrowIST.getTime();
+      today=nsGrouped[nextKey].sort((a,b)=>new Date(a.utc)-new Date(b.utc));
+      const isTomorrow=nextKey===tomorrowKey();
       upcomingLabel=isTomorrow
         ?'TOMORROW\'S MATCHES'
-        :nextIST.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'}).toUpperCase()+' MATCHES';
+        :new Date(nextKey+'T12:00:00Z').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',timeZone:USER_TZ}).toUpperCase()+' MATCHES';
     }
   }
 
@@ -1224,16 +1237,15 @@ function renderAll(){
     // Group by IST date key (YYYY-MM-DD), newest first
     const ftByDate={};
     [...ft].sort((a,b)=>new Date(b.utc)-new Date(a.utc)).forEach(m=>{
-      const d=toIST(m.utc);
-      const k=`${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+      const k=localDateKey(m.utc);
       (ftByDate[k]=ftByDate[k]||[]).push(m);
     });
     const dateKeys=Object.keys(ftByDate); // already newest-first
 
     function dayLabel(k){
-      const [y,mo,dy]=k.split('-').map(Number);
-      return new Date(Date.UTC(y,mo-1,dy)).toLocaleDateString('en-IN',
-        {weekday:'long',day:'numeric',month:'long',timeZone:'UTC'}).toUpperCase();
+      // k = "2026-06-13" in user's local timezone — format at noon UTC to avoid DST edge cases
+      return new Date(k+'T12:00:00Z').toLocaleDateString('en-IN',
+        {weekday:'long',day:'numeric',month:'long',timeZone:USER_TZ}).toUpperCase();
     }
 
     // Each day block = date label + its own full-width card grid
@@ -1307,10 +1319,6 @@ function renderAll(){
   }
 }
 
-function istMidnight(off=0){
-  const IST=5.5*3600000;const n=new Date();const i=new Date(n.getTime()+IST);
-  return new Date(Date.UTC(i.getUTCFullYear(),i.getUTCMonth(),i.getUTCDate()+off)-IST);
-}
 
 // ── MAIN POLL LOOP ────────────────────────────────
 let pollTimer=null;
@@ -1500,9 +1508,11 @@ async function initNews(){
 }
 
 // ── KICK IT OFF ───────────────────────────────────
+// Set timezone label in hero and footer
+(()=>{const lbl=getTZLabel();['tz-label','tz-label-footer'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=lbl;});})();
 renderAll();
 poll();
-fetchPendingStats(); // fetch stats for any FT matches already in static data
+fetchPendingStats();
 initNews();
 </script>
 </body>
