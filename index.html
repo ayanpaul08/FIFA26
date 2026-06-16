@@ -1012,21 +1012,33 @@ async function fetchMatchStats(espnId){
       console.log('[Stats] parsed values:',
         Object.entries(stats).map(([k,v])=>k+':'+v.h+'/'+v.a).join(' | '));
 
-      // Scan plays/keyEvents for card totals (boxscore stats often don't include cards)
-      let yellowTotal=0, redTotal=0;
+      // Extract individual card events from plays/keyEvents
+      // This is the reliable source for cards regardless of match age
+      const extractedCards=[];
       const events=d.plays||d.keyEvents||d.playByPlay||[];
       events.forEach(e=>{
-        const t=(e.type?.text||e.type?.displayName||e.text||'').toLowerCase();
-        if(t.includes('yellow card')||t==='caution') yellowTotal++;
-        else if(t.includes('red card')||t.includes('ejection')) redTotal++;
+        const typeText=e.type?.text||e.type?.displayName||e.text||'';
+        const t=typeText.toLowerCase();
+        const player=e.participants?.[0]?.athlete?.displayName||'';
+        const clock=e.clock?.displayValue||'';
+        if(t.includes('second yellow')){
+          extractedCards.push({player,clock,color:'yellow'});
+          extractedCards.push({player,clock,color:'red'}); // second yellow = red
+        } else if(t.includes('yellow card')||t==='caution'){
+          extractedCards.push({player,clock,color:'yellow'});
+        } else if(t.includes('red card')||t.includes('ejection')||t.includes('sending off')){
+          extractedCards.push({player,clock,color:'red'});
+        }
       });
-      if(yellowTotal>0) stats.yellowCards={h:null,a:null,total:yellowTotal};
-      if(redTotal>0)    stats.redCards   ={h:null,a:null,total:redTotal};
-      console.log('[Stats] cards from plays: yellow='+yellowTotal+' red='+redTotal);
+      console.log('[Stats] cards from plays: yellow='+extractedCards.filter(c=>c.color==='yellow').length
+        +' red='+extractedCards.filter(c=>c.color==='red').length);
 
-      const meaningful=Object.values(stats).some(s=>(s.h||0)+(s.a||0)+(s.total||0)>0);
-      if(meaningful){ console.log('[Stats] ✅ Stats found for event',espnId); return stats; }
-      console.warn('[Stats] ⚠ All stats zero/null for event',espnId,'via',url.split('?')[0].split('/').pop());
+      const meaningful=Object.values(stats).some(s=>(s.h||0)+(s.a||0)>0);
+      if(meaningful||extractedCards.length){
+        console.log('[Stats] ✅ Data found for event',espnId);
+        return {stats:meaningful?stats:null, cards:extractedCards};
+      }
+      console.warn('[Stats] ⚠ No data for event',espnId);
     }catch(e){
       console.warn('[Stats] ❌ Error:',e.message,'for',url);
     }
@@ -1038,10 +1050,11 @@ async function fetchMatchStats(espnId){
 // to test fetching stats for any ESPN event ID
 window.debugStats=async function(espnId){
   console.log('=== debugStats(',espnId,') ===');
-  const stats=await fetchMatchStats(espnId);
-  console.log('Result:',stats?'✅ GOT STATS':'❌ null returned');
-  if(stats) console.table(Object.entries(stats).map(([k,v])=>({stat:k,home:v.h,away:v.a})));
-  return stats;
+  const result=await fetchMatchStats(espnId);
+  console.log('Stats:',result?.stats?'✅':'null','| Cards:',result?.cards?.length??0);
+  if(result?.stats) console.table(Object.entries(result.stats).map(([k,v])=>({stat:k,h:v.h,a:v.a})));
+  if(result?.cards) console.table(result.cards);
+  return result;
 };
 
 // Update only the back face of a specific card when stats arrive
@@ -1074,12 +1087,20 @@ async function fetchPendingStats(){
   await Promise.allSettled(pending.map(async m=>{
     _statsFetched.add(m.espnId);
     console.log('[Stats] Fetching summary for',m.home,'v',m.away,'espnId:',m.espnId);
-    const stats=await fetchMatchStats(m.espnId);
-    if(stats){
-      m.stats=stats;
+    const result=await fetchMatchStats(m.espnId);
+    if(result){
+      if(result.stats) m.stats=result.stats;
+      // Store card events from summary — this is the reliable source for old matches
+      // that have aged out of the scoreboard's details window
+      if(result.cards?.length){
+        m.cards=result.cards;
+        console.log('[Stats] Cards from summary:',
+          result.cards.filter(c=>c.color==='yellow').length,'yellow',
+          result.cards.filter(c=>c.color==='red').length,'red');
+      }
       updateCardBack(m);
     } else {
-      console.warn('[Stats] No stats returned for',m.home,'v',m.away);
+      console.warn('[Stats] No data returned for',m.home,'v',m.away);
     }
   }));
 }
