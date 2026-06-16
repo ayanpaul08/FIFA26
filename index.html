@@ -514,18 +514,36 @@ function parseEvents(data){
   });
 }
 
-// Fetch past 2 days + today + tomorrow to get all recent + live results
+// Fetch recent window + any match dates missing espnId (regardless of age)
+// This ensures old matches like June 12 still get their event IDs and summary data
 async function fetchAllRecent(){
-  const days=[-4,-3,-2,-1,0,1].map(o=>{
+  const GRPS=['A','B','C','D','E','F','G','H','I','J','K','L'];
+  const datesToFetch=new Set();
+
+  // Standard rolling window: 3 days back + today + tomorrow
+  [-3,-2,-1,0,1].forEach(o=>{
     const d=new Date(Date.now()+o*86400000);
-    return d.toISOString().slice(0,10).replace(/-/g,'');
+    datesToFetch.add(d.toISOString().slice(0,10).replace(/-/g,''));
   });
+
+  // Also fetch the specific date of ANY match that hasn't received an espnId yet
+  // (covers old matches that fell outside the rolling window before getting their ID)
+  const tomorrow=new Date(Date.now()+86400000);
+  MATCHES.filter(m=>GRPS.includes(m.grp)&&!m.espnId).forEach(m=>{
+    const d=new Date(m.utc);
+    if(d<=tomorrow){ // skip future matches beyond tomorrow
+      datesToFetch.add(d.toISOString().slice(0,10).replace(/-/g,''));
+    }
+  });
+
+  const days=[...datesToFetch];
   const all=[];
-  const results = await Promise.allSettled(days.map(ds=>fetchDate(ds)));
+  const results=await Promise.allSettled(days.map(ds=>fetchDate(ds)));
   results.forEach((r,i)=>{
     if(r.status==='fulfilled') all.push(...parseEvents(r.value));
     else console.warn('[ESPN] Failed:',days[i],r.reason?.message);
   });
+  console.log('[ESPN] Fetched',days.length,'dates:',days.join(', '));
   return all;
 }
 

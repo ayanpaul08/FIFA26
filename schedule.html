@@ -226,7 +226,19 @@ function parseEvents(data){
   });
 }
 async function fetchAllRecent(){
-  const days=[-2,-1,0,1].map(o=>{const d=new Date(Date.now()+o*86400000);return d.toISOString().slice(0,10).replace(/-/g,'')});
+  const datesToFetch=new Set();
+  // Rolling window: 3 days back + today + tomorrow
+  [-3,-2,-1,0,1].forEach(o=>{
+    const d=new Date(Date.now()+o*86400000);
+    datesToFetch.add(d.toISOString().slice(0,10).replace(/-/g,''));
+  });
+  // Also add specific dates of any matches missing espnId (handles old matches outside window)
+  const tomorrow=new Date(Date.now()+86400000);
+  MATCHES.filter(m=>GROUPS.includes(m.grp)&&!m.espnId).forEach(m=>{
+    const d=new Date(m.utc);
+    if(d<=tomorrow) datesToFetch.add(d.toISOString().slice(0,10).replace(/-/g,''));
+  });
+  const days=[...datesToFetch];
   const all=[];
   const res=await Promise.allSettled(days.map(ds=>fetchDate(ds)));
   res.forEach(r=>{if(r.status==='fulfilled')all.push(...parseEvents(r.value))});
@@ -250,16 +262,12 @@ function patchMatches(live){
 // ═══════════════════════════════════════════════
 //  HELPERS
 // ═══════════════════════════════════════════════
-const IST = 5.5*3600000;
-function toIST(u){return new Date(new Date(u).getTime()+IST)}
-function fmtTime(u){return toIST(u).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'UTC'})}
-function fmtDateLong(u){return toIST(u).toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:'UTC'}).toUpperCase()}
-function fmtShort(u){return toIST(u).toLocaleDateString('en-IN',{day:'numeric',month:'short',timeZone:'UTC'})}
-function getISTDateKey(u){
-  const d=toIST(u);
-  // Use YYYY-MM-DD as sort key (UTC-shifted to IST)
-  return`${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
-}
+const USER_TZ=Intl.DateTimeFormat().resolvedOptions().timeZone;
+function getTZLabel(){return new Date().toLocaleTimeString('en-US',{timeZoneName:'short',timeZone:USER_TZ}).split(' ').pop();}
+function fmtTime(u){return new Date(u).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true,timeZone:USER_TZ});}
+function fmtDateLong(u){return new Date(u).toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:USER_TZ}).toUpperCase();}
+function fmtShort(u){return new Date(u).toLocaleDateString('en-IN',{day:'numeric',month:'short',timeZone:USER_TZ});}
+function getISTDateKey(u){return new Date(u).toLocaleDateString('en-CA',{timeZone:USER_TZ});}
 
 // ═══════════════════════════════════════════════
 //  BUILD SCHEDULE ROW HTML
@@ -308,7 +316,7 @@ function renderGroupSchedule(){
     .sort((a,b)=>new Date(a.utc)-new Date(b.utc));
 
   // Today check in IST
-  const nowIST=toIST(new Date().toISOString());
+  const nowIST=new Date();
   const todayKey=`${nowIST.getUTCFullYear()}-${String(nowIST.getUTCMonth()+1).padStart(2,'0')}-${String(nowIST.getUTCDate()).padStart(2,'0')}`;
 
   // Group by IST date key (sortable YYYY-MM-DD) → preserve insertion order after sorting
@@ -358,7 +366,7 @@ function renderKnockout(){
     const ms=MATCHES.filter(m=>m.grp===k);if(!ms.length)return;
     html+=`<div class="ko-stage" style="color:${c}">${l}</div>`;
     ms.forEach(m=>{
-      const ist=toIST(m.utc).toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'UTC'})+' IST';
+      const ist=new Date(m.utc).toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:true,timeZone:USER_TZ})+' '+getTZLabel();
       html+=`<div class="ko-row" style="--ko-c:${c}">
         <div class="ko-label">${m.label||'TBD vs TBD'}</div>
         <div class="ko-time">🕐 ${ist}</div>
