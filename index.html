@@ -53,7 +53,7 @@ a{text-decoration:none;color:inherit}
 /* ── LIVE TOURNAMENT STATS STRIP ─────────────────── */
 .stats-strip{
   display:grid;
-  grid-template-columns:repeat(6,1fr);
+  grid-template-columns:repeat(5,1fr);
   gap:.6rem;
   max-width:1300px;margin:0 auto;
   padding:1rem 1.5rem 0;
@@ -91,8 +91,6 @@ a{text-decoration:none;color:inherit}
 .aw-rank{color:var(--muted);font-size:.52rem;min-width:10px;flex-shrink:0}
 .aw-n{flex:1;color:rgba(255,255,255,.88);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .aw-cnt{color:var(--gold);font-weight:900;font-family:'Orbitron',monospace;font-size:.58rem;flex-shrink:0}
-.aw-sv{color:var(--gold);font-weight:800;font-size:.56rem;flex-shrink:0}
-.aw-cs{color:var(--green);font-weight:800;font-size:.56rem;flex-shrink:0}
 .aw-ctry{color:var(--muted);font-size:.52rem;flex-shrink:0;min-width:22px;text-align:right}
 .pill{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:30px;padding:.35rem 1rem;font-size:.75rem;font-weight:700;color:rgba(255,255,255,.6);letter-spacing:.5px}
 .pill strong{color:var(--gold)}
@@ -364,7 +362,6 @@ a{text-decoration:none;color:inherit}
   <div class="stat-chip"><span class="sv" id="st-yellow">–</span><span class="sl">Yellow Cards</span></div>
   <div class="stat-chip"><span class="sv" id="st-red">–</span><span class="sl">Red Cards</span></div>
   <div class="stat-chip award-chip"><div class="aw-list" id="st-boot"><div class="aw-row"><span class="aw-n">–</span></div></div><span class="sl">Golden Boot</span></div>
-  <div class="stat-chip award-chip"><div class="aw-list" id="st-glove"><div class="aw-row"><span class="aw-n">–</span></div></div><span class="sl">Golden Glove</span></div>
 </div>
 
 <div class="wrap">
@@ -998,7 +995,19 @@ async function fetchMatchStats(espnId){
       console.log('[Stats] parsed values:',
         Object.entries(stats).map(([k,v])=>k+':'+v.h+'/'+v.a).join(' | '));
 
-      const meaningful=Object.values(stats).some(s=>(s.h||0)+(s.a||0)>0);
+      // Scan plays/keyEvents for card totals (boxscore stats often don't include cards)
+      let yellowTotal=0, redTotal=0;
+      const events=d.plays||d.keyEvents||d.playByPlay||[];
+      events.forEach(e=>{
+        const t=(e.type?.text||e.type?.displayName||e.text||'').toLowerCase();
+        if(t.includes('yellow card')||t==='caution') yellowTotal++;
+        else if(t.includes('red card')||t.includes('ejection')) redTotal++;
+      });
+      if(yellowTotal>0) stats.yellowCards={h:null,a:null,total:yellowTotal};
+      if(redTotal>0)    stats.redCards   ={h:null,a:null,total:redTotal};
+      console.log('[Stats] cards from plays: yellow='+yellowTotal+' red='+redTotal);
+
+      const meaningful=Object.values(stats).some(s=>(s.h||0)+(s.a||0)+(s.total||0)>0);
       if(meaningful){ console.log('[Stats] ✅ Stats found for event',espnId); return stats; }
       console.warn('[Stats] ⚠ All stats zero/null for event',espnId,'via',url.split('?')[0].split('/').pop());
     }catch(e){
@@ -1097,60 +1106,20 @@ function getTopScorers(){
     }));
 }
 
-// Golden Glove — saves + clean sheets (sorted: CS desc, then saves desc)
-function getTopSavers(){
-  const tally={};
-  const GRPS=['A','B','C','D','E','F','G','H','I','J','K','L'];
-  MATCHES.filter(m=>GRPS.includes(m.grp)&&m.st==='FT').forEach(m=>{
-    const hGK=(PLAYERS[m.home]||[]).find(p=>p.p==='GK');
-    const aGK=(PLAYERS[m.away]||[]).find(p=>p.p==='GK');
-    if(hGK){
-      if(!tally[hGK.n]) tally[hGK.n]={sv:0,cs:0,gp:0,tid:m.home};
-      tally[hGK.n].gp++;
-      if(m.stats?.saves?.h>0) tally[hGK.n].sv+=m.stats.saves.h;
-      if((m.as||99)===0) tally[hGK.n].cs++;  // home didn't concede = home GK clean sheet
-    }
-    if(aGK){
-      if(!tally[aGK.n]) tally[aGK.n]={sv:0,cs:0,gp:0,tid:m.away};
-      tally[aGK.n].gp++;
-      if(m.stats?.saves?.a>0) tally[aGK.n].sv+=m.stats.saves.a;
-      if((m.hs||99)===0) tally[aGK.n].cs++;  // away didn't concede = away GK clean sheet
-    }
-  });
-  return Object.entries(tally)
-    .filter(([,v])=>v.gp>0)
-    .sort((a,b)=>b[1].cs-a[1].cs||b[1].sv-a[1].sv)  // CS first, saves as tiebreaker
-    .slice(0,3)
-    .map(([name,{sv,cs,tid}])=>({
-      name: name.split(' ').pop(),
-      sv, cs,
-      ctry: FIFA_CODE[tid]||tid.slice(0,3).toUpperCase()
-    }));
-}
 
-function renderAwardChip(elId, entries, type){
+function renderAwardChip(elId, entries){
   const el=document.getElementById(elId);
   if(!el) return;
   if(!entries.length){
     el.innerHTML='<div class="aw-row"><span class="aw-n" style="color:var(--muted)">No data yet</span></div>';
     return;
   }
-  if(type==='glove'){
-    el.innerHTML=entries.map((e,i)=>`<div class="aw-row">
-      <span class="aw-rank">${i+1}</span>
-      <span class="aw-n">${e.name}</span>
-      <span class="aw-sv">${e.sv}sv</span>
-      <span class="aw-cs">${e.cs}cs</span>
-      <span class="aw-ctry">${e.ctry}</span>
-    </div>`).join('');
-  } else {
-    el.innerHTML=entries.map((e,i)=>`<div class="aw-row">
-      <span class="aw-rank">${i+1}</span>
-      <span class="aw-n">${e.name}</span>
-      <span class="aw-cnt">${e.count}</span>
-      <span class="aw-ctry">${e.ctry}</span>
-    </div>`).join('');
-  }
+  el.innerHTML=entries.map((e,i)=>`<div class="aw-row">
+    <span class="aw-rank">${i+1}</span>
+    <span class="aw-n">${e.name}</span>
+    <span class="aw-cnt">${e.count}</span>
+    <span class="aw-ctry">${e.ctry}</span>
+  </div>`).join('');
 }
 
 // ══════════════════════════════════════════════════
@@ -1164,15 +1133,16 @@ function computeAndRenderStats(){
              +live.reduce((s,m)=>s+(m.hs||0)+(m.as||0),0);
   const played=ft.length;
 
-  // Cards — dual source: m.cards (recent scoreboard) + m.stats card totals (summary, all FT)
+  // Cards — dual source: m.cards (recent scoreboard) + m.stats card totals (summary plays scan)
   let yellow=0, red=0;
   ft.forEach(m=>{
     if(m.cards?.length){
       yellow+=m.cards.filter(c=>c.color==='yellow').length;
       red   +=m.cards.filter(c=>c.color==='red').length;
     } else if(m.stats){
-      yellow+=(m.stats.yellowCards?.h||0)+(m.stats.yellowCards?.a||0);
-      red   +=(m.stats.redCards?.h||0)+(m.stats.redCards?.a||0);
+      // .total comes from d.plays scan in fetchMatchStats; .h/.a from boxscore (fallback)
+      yellow+=m.stats.yellowCards?.total??((m.stats.yellowCards?.h||0)+(m.stats.yellowCards?.a||0));
+      red   +=m.stats.redCards?.total   ??((m.stats.redCards?.h||0)+(m.stats.redCards?.a||0));
     }
   });
 
@@ -1182,8 +1152,8 @@ function computeAndRenderStats(){
   set('st-yellow', yellow||'–');
   set('st-red',    red||'–');
 
-  renderAwardChip('st-boot',  getTopScorers(), 'boot');
-  renderAwardChip('st-glove', getTopSavers(),  'glove');
+  renderAwardChip('st-boot', getTopScorers());
+
 }
 
 function renderAll(){
