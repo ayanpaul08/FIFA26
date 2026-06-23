@@ -1344,9 +1344,9 @@ async function fetchQualifiedTeams(){
     groups.forEach(g=>{
       const entries=g.standings?.entries||[];
       entries.forEach(e=>{
-        const note=(e.note?.description||e.note?.rank||'').toLowerCase();
-        // ESPN marks qualified teams with a note like "Advance to Knockout Stage"
-        const qualifies=note.includes('advance')||note.includes('qualif')||note.includes('knockout');
+        const note=(e.note?.description||'').toLowerCase();
+        // Confirmed via live ESPN response: "Advance to Round of 32"
+        const qualifies=note.includes('advance')||note.includes('qualif');
         if(qualifies){
           const name=e.team?.displayName||e.team?.name;
           const abbr=e.team?.abbreviation;
