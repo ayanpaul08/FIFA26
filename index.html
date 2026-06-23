@@ -420,6 +420,7 @@ a{text-decoration:none;color:inherit}
 </div>
 
 <script src="js/data.js"></script>
+<script src="js/clinch.js"></script>
 <script src="js/app.js"></script>
 <script>
 // ═══════════════════════════════════════════════════
@@ -978,17 +979,8 @@ function buildCard(m){
   </div>`;
 }
 
-function standings(grp){
-  const teams={};
-  const init=id=>{if(!teams[id])teams[id]={id,gp:0,w:0,d:0,l:0,gf:0,ga:0,pts:0}};
-  MATCHES.filter(m=>m.grp===grp).forEach(m=>{init(m.home);init(m.away)});
-  MATCHES.filter(m=>m.grp===grp&&m.st!=='NS').forEach(m=>{
-    const h=teams[m.home],a=teams[m.away];
-    h.gp++;a.gp++;h.gf+=m.hs;h.ga+=m.as;a.gf+=m.as;a.ga+=m.hs;
-    if(m.hs>m.as){h.w++;h.pts+=3;a.l++}else if(m.hs<m.as){a.w++;a.pts+=3;h.l++}else{h.d++;a.d++;h.pts++;a.pts++}
-  });
-  return Object.values(teams).sort((a,b)=>b.pts-a.pts||(b.gf-b.ga)-(a.gf-a.ga)||b.gf-a.gf);
-}
+// standings() now lives in js/clinch.js (shared with schedule.html)
+
 
 // ══════════════════════════════════════════════════
 //  MATCH STATISTICS — ESPN Summary + Boxscore endpoints
@@ -1260,131 +1252,9 @@ function computeAndRenderStats(){
 
 }
 
-// ══════════════════════════════════════════════════
-//  KNOCKOUT BRACKET (Phase 1 — auto-fills group winners,
-//  shows range labels for unresolved 3rd-place wildcard slots)
-// ══════════════════════════════════════════════════
-
-// Maps each R32 match id to its qualification rule.
-// pos: 1/2 = group winner/runner-up (resolves any time that group finishes)
-//      3   = one of several possible 3rd-place teams (resolves only after
-//             all 72 group matches end, once FIFA's best-8-3rds rule applies)
-const BRACKET_R32=[
-  {id:'R32-1', home:{grp:'A',pos:1}, away:{pos:3,pool:['C','E','F','H','I']}},
-  {id:'R32-2', home:{grp:'B',pos:1}, away:{pos:3,pool:['A','C','D','G']}},
-  {id:'R32-3', home:{grp:'A',pos:2}, away:{grp:'B',pos:2}},
-  {id:'R32-4', home:{grp:'C',pos:1}, away:{pos:3,pool:['A','B','D','H','K','L']}},
-  {id:'R32-5', home:{grp:'D',pos:1}, away:{pos:3,pool:['C','E','F','H','I']}},
-  {id:'R32-6', home:{grp:'C',pos:2}, away:{grp:'D',pos:2}},
-  {id:'R32-7', home:{grp:'E',pos:1}, away:{pos:3,pool:['D','F','G','J','K']}},
-  {id:'R32-8', home:{grp:'F',pos:1}, away:{pos:3,pool:['A','B','D','H','K','L']}},
-  {id:'R32-9', home:{grp:'E',pos:2}, away:{grp:'F',pos:2}},
-  {id:'R32-10',home:{grp:'G',pos:1}, away:{pos:3,pool:['D','E','F','I','K']}},
-  {id:'R32-11',home:{grp:'H',pos:1}, away:{pos:3,pool:['A','B','G','J','L']}},
-  {id:'R32-12',home:{grp:'G',pos:2}, away:{grp:'H',pos:2}},
-  {id:'R32-13',home:{grp:'I',pos:1}, away:{pos:3,pool:['B','D','E','G','J']}},
-  {id:'R32-14',home:{grp:'I',pos:2}, away:{grp:'J',pos:2}},
-  {id:'R32-15',home:{grp:'J',pos:1}, away:{pos:3,pool:['F','G','H','I','K','L']}},
-  {id:'R32-16',home:{grp:'K',pos:2}, away:{grp:'L',pos:2}},
-];
-// QF/SF/Final structure — which R32/QF/SF winners feed into each slot
-const BRACKET_LATER=[
-  {round:'QF',id:'QF1',from:['R32-1','R32-2']},
-  {round:'QF',id:'QF2',from:['R32-3','R32-4']}, // approximated pairing for display
-  {round:'QF',id:'QF3',from:['R32-5','R32-6']},
-  {round:'QF',id:'QF4',from:['R32-7','R32-8']},
-  {round:'SF',id:'SF1',from:['QF1','QF2']},
-  {round:'SF',id:'SF2',from:['QF3','QF4']},
-  {round:'F', id:'FINAL',from:['SF1','SF2']},
-];
-
-// ── ESPN-sourced qualification status ─────────────
-// ESPN applies the full FIFA tiebreaker math (head-to-head, goal difference,
-// disciplinary points, etc.) themselves — we don't try to replicate that.
-// Instead we read whichever "qualified" signal their standings endpoint exposes
-// and use it as the authoritative source. Falls back to "group fully played"
-// if ESPN's data is unavailable or doesn't include a clear signal.
-const QUALIFIED_IDS=new Set(); // teamId set, refreshed every poll
-
-// Best-effort match of ESPN's team name/abbrev to our internal teamId.
-// ESPN's display names sometimes differ from ours (e.g. "United States" vs
-// our "USA", "Korea Republic" vs "South Korea") — explicit aliases first,
-// exact match second, loose contains-match as last resort only.
-const TEAM_ALIASES={
-  'united states':'usa','usmnt':'usa',
-  'korea republic':'south_korea','republic of korea':'south_korea',
-  "côte d'ivoire":'ivory_coast','cote d ivoire':'ivory_coast',
-  'curacao':'curacao', // accent-stripped variant
-  'bosnia and herzegovina':'bosnia','bosnia & herzegovina':'bosnia','bosnia-herzegovina':'bosnia',
-  'turkey':'turkiye',
-  'congo dr':'dr_congo','dr congo':'dr_congo','democratic republic of the congo':'dr_congo',
-  'czech republic':'czechia',
-};
-function matchTeamId(espnName,espnAbbr){
-  const n=(espnName||'').toLowerCase().trim();
-  if(TEAM_ALIASES[n]) return TEAM_ALIASES[n];
-  for(const [id,t] of Object.entries(TEAMS)){
-    if(t.name.toLowerCase()===n) return id;
-  }
-  // Loose contains-match fallback (handles minor punctuation/accent diffs)
-  for(const [id,t] of Object.entries(TEAMS)){
-    const tn=t.name.toLowerCase();
-    if(n.includes(tn)||tn.includes(n)) return id;
-  }
-  return null;
-}
-
-async function fetchQualifiedTeams(){
-  try{
-    const r=await fetch('https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings');
-    if(!r.ok){ console.warn('[Bracket] standings fetch failed:',r.status); return; }
-    const d=await r.json();
-    const groups=d.children||d.standings?.entries||[];
-    let found=0;
-    groups.forEach(g=>{
-      const entries=g.standings?.entries||[];
-      entries.forEach(e=>{
-        const note=(e.note?.description||'').toLowerCase();
-        // Confirmed via live ESPN response: "Advance to Round of 32"
-        const qualifies=note.includes('advance')||note.includes('qualif');
-        if(qualifies){
-          const name=e.team?.displayName||e.team?.name;
-          const abbr=e.team?.abbreviation;
-          const id=matchTeamId(name,abbr);
-          if(id){ QUALIFIED_IDS.add(id); found++; }
-          else console.warn('[Bracket] Could not match qualified team:',name);
-        }
-      });
-    });
-    console.log('[Bracket] ESPN qualified teams found:',found,'| Total tracked:',QUALIFIED_IDS.size);
-  }catch(e){
-    console.warn('[Bracket] standings fetch error:',e.message);
-  }
-}
-
-// Returns {gp, locked, teamId} — locked=true when ESPN confirms qualification
-// OR (fallback) when the group has played all 6 of its matches
-function resolveGroupPos(grp,pos){
-  const matches=MATCHES.filter(m=>m.grp===grp);
-  const totalPlayed=matches.filter(m=>m.st!=='NS').length;
-  const table=standings(grp);
-  if(!table[pos-1]) return null;
-  const teamId=table[pos-1].id;
-  const groupDone=totalPlayed===matches.length&&matches.length>0;
-  // ESPN-confirmed qualification overrides our own "group finished" check —
-  // this is what lets Mexico/USA/Germany show as locked in before their
-  // group's 6th match has even been played, matching ESPN's own clinching logic
-  const locked=QUALIFIED_IDS.has(teamId)||groupDone;
-  return {teamId, locked, gp:table[pos-1].gp};
-}
-
-function allGroupsComplete(){
-  const GRPS=['A','B','C','D','E','F','G','H','I','J','K','L'];
-  return GRPS.every(g=>{
-    const gm=MATCHES.filter(m=>m.grp===g);
-    return gm.length>0&&gm.every(m=>m.st!=='NS');
-  });
-}
+// BRACKET_R32, BRACKET_LATER, and the clinch/tiebreak engine
+// (clinchApplyResult..allGroupsComplete) now live in js/clinch.js
+// so schedule.html can share the exact same logic.
 
 function renderBracketSlot(resolved,pendingLabel){
   if(resolved&&resolved.locked){
@@ -1403,7 +1273,7 @@ function renderBracket(){
   if(noteEl){
     noteEl.textContent=groupsComplete
       ?'Group stage complete — bracket slots locked in'
-      :'Slots fill in as teams clinch qualification (per ESPN) or their group finishes. Third-place qualifiers are confirmed once all group matches end.';
+      :'Slots fill in once a team\'s qualification is mathematically guaranteed — calculated live using FIFA\'s 2026 tiebreaker rules. Third-place qualifiers are confirmed once all group matches end.';
   }
 
   // Build R32 slot HTML
@@ -1607,9 +1477,6 @@ async function poll(){
     fetchCount++;
     // Async: fetch detailed match stats for completed matches (separate summary endpoint)
     fetchPendingStats();
-    // Async: refresh ESPN's own qualification calls — re-render bracket once done
-    // so newly-clinched teams (e.g. Mexico/USA/Germany) appear without a full page reload
-    fetchQualifiedTeams().then(()=>renderBracket());
   }catch(e){
     console.error('[ESPN]',e);
     hasError=true;
@@ -1790,7 +1657,6 @@ async function initNews(){
 renderAll();
 poll();
 fetchPendingStats();
-fetchQualifiedTeams().then(()=>renderBracket());
 initNews();
 </script>
 </body>

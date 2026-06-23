@@ -156,6 +156,7 @@ a{text-decoration:none;color:inherit}
 </div>
 
 <script src="js/data.js"></script>
+<script src="js/clinch.js"></script>
 <script src="js/app.js"></script>
 <script>
 // ═══════════════════════════════════════════════
@@ -267,7 +268,7 @@ function getTZLabel(){return new Date().toLocaleTimeString('en-US',{timeZoneName
 function fmtTime(u){return new Date(u).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true,timeZone:USER_TZ});}
 function fmtDateLong(u){return new Date(u).toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:USER_TZ}).toUpperCase();}
 function fmtShort(u){return new Date(u).toLocaleDateString('en-IN',{day:'numeric',month:'short',timeZone:USER_TZ});}
-function getISTDateKey(u){return new Date(u).toLocaleDateString('en-CA',{timeZone:USER_TZ});}
+function getLocalDateKey(u){return new Date(u).toLocaleDateString('en-CA',{timeZone:USER_TZ});}
 
 // ═══════════════════════════════════════════════
 //  BUILD SCHEDULE ROW HTML
@@ -322,7 +323,7 @@ function renderGroupSchedule(){
   // Group by IST date key (sortable YYYY-MM-DD) → preserve insertion order after sorting
   const byKey={};
   gm.forEach(m=>{
-    const k=getISTDateKey(m.utc);
+    const k=getLocalDateKey(m.utc);
     if(!byKey[k])byKey[k]={label:fmtDateLong(m.utc),matches:[]};
     byKey[k].matches.push(m);
   });
@@ -352,6 +353,35 @@ function updateScoreCells(){
 // ═══════════════════════════════════════════════
 //  KNOCKOUT SCHEDULE
 // ═══════════════════════════════════════════════
+// Resolves a single side of an R32 slot using the shared clinch engine
+// (js/clinch.js — same BRACKET_R32 mapping and resolveGroupPos() that
+// index.html's bracket uses). Returns {text, locked}: text is either a
+// resolved "🇫🇷 France"-style name (locked:true) or a pending placeholder
+// like "1A" / "3rd: C/E/F/H/I" (locked:false).
+function resolveKoSide(side){
+  if(side.pos<=2){
+    const r=resolveGroupPos(side.grp,side.pos);
+    if(r&&r.locked){
+      const t=TEAMS[r.teamId];
+      return {text:t?`${t.flag} ${t.name}`:r.teamId, locked:true};
+    }
+    return {text:`${side.pos}${side.grp}`, locked:false};
+  }
+  // 3rd-place wildcard slots only resolve once ALL 12 groups finish
+  return {text:`3rd: ${side.pool.join('/')}`, locked:false};
+}
+// Builds a resolved-as-far-as-possible "Home vs Away" label for an R32
+// match id — each side shows a real team name once mathematically
+// locked, or its placeholder (e.g. "1A", "3rd: C/E/F/H/I") otherwise.
+// Falls back to the original static label only if BRACKET_R32 has no
+// mapping for this id (shouldn't happen for real R32 ids).
+function resolveKoLabel(matchId,fallbackLabel){
+  const slot=BRACKET_R32.find(s=>s.id===matchId);
+  if(!slot) return fallbackLabel;
+  const home=resolveKoSide(slot.home);
+  const away=resolveKoSide(slot.away);
+  return `${home.text} vs ${away.text}`;
+}
 function renderKnockout(){
   const stages=[
     {k:'R32',l:'Round of 32',c:'var(--blue)'},
@@ -367,8 +397,12 @@ function renderKnockout(){
     html+=`<div class="ko-stage" style="color:${c}">${l}</div>`;
     ms.forEach(m=>{
       const ist=new Date(m.utc).toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:true,timeZone:USER_TZ})+' '+getTZLabel();
+      // R32 slots resolve per-side as groups finish (same engine as
+      // index.html's bracket). R16+ stay as static labels for now since
+      // they depend on R32 results, which haven't been played yet.
+      const label=(k==='R32')?resolveKoLabel(m.id,m.label||'TBD vs TBD'):(m.label||'TBD vs TBD');
       html+=`<div class="ko-row" style="--ko-c:${c}">
-        <div class="ko-label">${m.label||'TBD vs TBD'}</div>
+        <div class="ko-label">${label}</div>
         <div class="ko-time">🕐 ${ist}</div>
         <div class="ko-venue">📍 ${m.venue}</div>
       </div>`;
@@ -445,7 +479,7 @@ function nextInterval(){
   if(gm.some(m=>m.st==='LIVE'))return 30000;
   const now=Date.now();
   if(gm.some(m=>m.st==='NS'&&Math.abs(new Date(m.utc)-now)<3*3600000))return 60000;
-  if(gm.some(m=>m.st==='NS'&&getISTDateKey(m.utc)===getISTDateKey(new Date().toISOString())))return 3*60000;
+  if(gm.some(m=>m.st==='NS'&&getLocalDateKey(m.utc)===getLocalDateKey(new Date().toISOString())))return 3*60000;
   return 10*60000;
 }
 
