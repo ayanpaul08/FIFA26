@@ -489,7 +489,7 @@ async function poll(){
   try{
     const live=await fetchAllRecent();
     const changed=patchMatches(live);
-    if(changed) updateScoreCells(); // fast: only update score cells, no full re-render
+    if(changed){ updateScoreCells(); renderKnockout(); } // score cells are cheap; knockout tab needs a full re-render since clinch status can change
     const isLive=MATCHES.some(m=>GROUPS.includes(m.grp)&&m.st==='LIVE');
     if(isLive) setStatus('live','Updating every 30s');
     else setStatus('ok','Scores live via ESPN');

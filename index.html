@@ -1301,17 +1301,27 @@ function renderBracket(){
   });
 
   // QF/SF/Final — Phase 1 shows these as TBD until R32 resolves (future phase will chain winners)
-  const laterHtml=BRACKET_LATER.map(r=>
-    `<div class="br-match ${r.round==='F'?'br-final':''}" data-id="${r.id}">
+  function renderLater(r){
+    return `<div class="br-match ${r.round==='F'?'br-final':''}" data-id="${r.id}">
       <div class="br-slot br-pending"><span class="br-name">Winner ${r.from[0]}</span></div>
       <div class="br-slot br-pending"><span class="br-name">Winner ${r.from[1]}</span></div>
-    </div>`
-  );
+    </div>`;
+  }
+  // Filter on each entry's own `round` field, NOT on substring-matching the
+  // rendered HTML — the Final's markup contains the text "Winner SF1/SF2",
+  // so an HTML-string .includes('SF') check would wrongly match the Final
+  // itself and render it twice (once in its own section, once under SF).
+  const qfHtml=BRACKET_LATER.filter(r=>r.round==='QF').map(renderLater).join('');
+  const sfHtml=BRACKET_LATER.filter(r=>r.round==='SF').map(renderLater).join('');
+  const finalHtml=BRACKET_LATER.filter(r=>r.round==='F').map(renderLater).join('');
 
   grid.innerHTML=`
     <div class="br-col"><div class="br-col-label">ROUND OF 32</div>${r32Html.slice(0,8).join('')}</div>
-    <div class="br-col"><div class="br-col-label">QUARTERFINALS</div>${laterHtml.filter(h=>h.includes('QF')).slice(0,2).join('')}</div>
-    <div class="br-col"><div class="br-col-label">SEMIFINALS / FINAL</div>${laterHtml.filter(h=>h.includes('SF')||h.includes('FINAL')).join('')}</div>
+    <div class="br-col"><div class="br-col-label">QUARTERFINALS</div>${qfHtml}</div>
+    <div class="br-col">
+      <div class="br-col-label">FINAL</div>${finalHtml}
+      <div class="br-col-label" style="margin-top:1.4rem">SEMIFINALS</div>${sfHtml}
+    </div>
     <div class="br-col"><div class="br-col-label">ROUND OF 32</div>${r32Html.slice(8,16).join('')}</div>
   `;
 }
