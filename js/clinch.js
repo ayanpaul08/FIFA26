@@ -30,37 +30,52 @@ function standings(grp){
 //  KNOCKOUT BRACKET SLOT MAPPING
 // ══════════════════════════════════════════════════
 
-// Maps each R32 match id to its qualification rule.
-// pos: 1/2 = group winner/runner-up (resolves any time that group finishes)
-//      3   = one of several possible 3rd-place teams (resolves only after
-//             all 72 group matches end, once FIFA's best-8-3rds rule applies)
+// ── FIFA's official 2026 knockout bracket (Match 73-104) ──────
+// Rebuilt from FIFA.com's own match schedule + cross-checked against
+// Wikipedia, CBS Sports, Sky Sports and MLSSoccer.com, all of which
+// agree exactly. Uses FIFA's real match numbers as ids (not made-up
+// R32-1..16 labels) so every slot can be checked directly against any
+// official source. Earlier version of this file had two real errors:
+// (1) wrong opponent type for several R32 slots (e.g. M76/Brazil was
+// modeled as "vs 3rd-place pool" when it's actually "vs Group F
+// runner-up"), and (2) the Round of 16 was missing entirely, with QF
+// wrongly built directly from R32 winners. Both are fixed below.
 const BRACKET_R32=[
-  {id:'R32-1', home:{grp:'A',pos:1}, away:{pos:3,pool:['C','E','F','H','I']}},
-  {id:'R32-2', home:{grp:'B',pos:1}, away:{pos:3,pool:['A','C','D','G']}},
-  {id:'R32-3', home:{grp:'A',pos:2}, away:{grp:'B',pos:2}},
-  {id:'R32-4', home:{grp:'C',pos:1}, away:{pos:3,pool:['A','B','D','H','K','L']}},
-  {id:'R32-5', home:{grp:'D',pos:1}, away:{pos:3,pool:['C','E','F','H','I']}},
-  {id:'R32-6', home:{grp:'C',pos:2}, away:{grp:'D',pos:2}},
-  {id:'R32-7', home:{grp:'E',pos:1}, away:{pos:3,pool:['D','F','G','J','K']}},
-  {id:'R32-8', home:{grp:'F',pos:1}, away:{pos:3,pool:['A','B','D','H','K','L']}},
-  {id:'R32-9', home:{grp:'E',pos:2}, away:{grp:'F',pos:2}},
-  {id:'R32-10',home:{grp:'G',pos:1}, away:{pos:3,pool:['D','E','F','I','K']}},
-  {id:'R32-11',home:{grp:'H',pos:1}, away:{pos:3,pool:['A','B','G','J','L']}},
-  {id:'R32-12',home:{grp:'G',pos:2}, away:{grp:'H',pos:2}},
-  {id:'R32-13',home:{grp:'I',pos:1}, away:{pos:3,pool:['B','D','E','G','J']}},
-  {id:'R32-14',home:{grp:'I',pos:2}, away:{grp:'J',pos:2}},
-  {id:'R32-15',home:{grp:'J',pos:1}, away:{pos:3,pool:['F','G','H','I','K','L']}},
-  {id:'R32-16',home:{grp:'K',pos:2}, away:{grp:'L',pos:2}},
+  {id:'M73', home:{grp:'A',pos:2}, away:{grp:'B',pos:2}},
+  {id:'M74', home:{grp:'E',pos:1}, away:{pos:3,pool:['A','B','C','D','F']}},
+  {id:'M75', home:{grp:'F',pos:1}, away:{grp:'C',pos:2}},
+  {id:'M76', home:{grp:'C',pos:1}, away:{grp:'F',pos:2}},
+  {id:'M77', home:{grp:'I',pos:1}, away:{pos:3,pool:['C','D','F','G','H']}},
+  {id:'M78', home:{grp:'E',pos:2}, away:{grp:'I',pos:2}},
+  {id:'M79', home:{grp:'A',pos:1}, away:{pos:3,pool:['C','E','F','H','I']}},
+  {id:'M80', home:{grp:'L',pos:1}, away:{pos:3,pool:['E','H','I','J','K']}},
+  {id:'M81', home:{grp:'D',pos:1}, away:{pos:3,pool:['B','E','F','I','J']}},
+  {id:'M82', home:{grp:'G',pos:1}, away:{pos:3,pool:['A','E','H','I','J']}},
+  {id:'M83', home:{grp:'K',pos:2}, away:{grp:'L',pos:2}},
+  {id:'M84', home:{grp:'H',pos:1}, away:{grp:'J',pos:2}},
+  {id:'M85', home:{grp:'B',pos:1}, away:{pos:3,pool:['E','F','G','I','J']}},
+  {id:'M86', home:{grp:'J',pos:1}, away:{grp:'H',pos:2}},
+  {id:'M87', home:{grp:'K',pos:1}, away:{pos:3,pool:['D','E','I','J','L']}},
+  {id:'M88', home:{grp:'D',pos:2}, away:{grp:'G',pos:2}},
 ];
-// QF/SF/Final structure — which R32/QF/SF winners feed into each slot
+// Round of 16, Quarter-finals, Semi-finals, Final — all winner-chains
+// off the R32 results above. Each `from` pair feeds one match.
 const BRACKET_LATER=[
-  {round:'QF',id:'QF1',from:['R32-1','R32-2']},
-  {round:'QF',id:'QF2',from:['R32-3','R32-4']}, // approximated pairing for display
-  {round:'QF',id:'QF3',from:['R32-5','R32-6']},
-  {round:'QF',id:'QF4',from:['R32-7','R32-8']},
-  {round:'SF',id:'SF1',from:['QF1','QF2']},
-  {round:'SF',id:'SF2',from:['QF3','QF4']},
-  {round:'F', id:'FINAL',from:['SF1','SF2']},
+  {round:'R16',id:'M89', from:['M74','M77']},
+  {round:'R16',id:'M90', from:['M73','M75']},
+  {round:'R16',id:'M91', from:['M76','M78']},
+  {round:'R16',id:'M92', from:['M79','M80']},
+  {round:'R16',id:'M93', from:['M83','M84']},
+  {round:'R16',id:'M94', from:['M81','M82']},
+  {round:'R16',id:'M95', from:['M86','M88']},
+  {round:'R16',id:'M96', from:['M85','M87']},
+  {round:'QF', id:'M97', from:['M89','M90']},
+  {round:'QF', id:'M98', from:['M93','M94']},
+  {round:'QF', id:'M99', from:['M91','M92']},
+  {round:'QF', id:'M100',from:['M95','M96']},
+  {round:'SF', id:'M101',from:['M97','M98']},
+  {round:'SF', id:'M102',from:['M99','M100']},
+  {round:'F',  id:'M104',from:['M101','M102']},
 ];
 
 // ── Mathematical clinch detection (FIFA 2026 rules) ────
