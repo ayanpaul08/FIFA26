@@ -228,7 +228,8 @@ function analyzeGroupClinch(groupMatches,fifaRanks){
   if(unplayed.length===0){
     const final=clinchRankGroup(base);
     return {finished:true,top2:final.slice(0,2).map(t=>t.id),third:final[2]?.id,
-      eliminated:final.slice(3).map(t=>t.id)};
+      eliminated:final.slice(3).map(t=>t.id),
+      pos1:final[0]?.id,pos2:final[1]?.id};
   }
   const positionSets={};
   teamIds.forEach(id=>positionSets[id]=new Set());
@@ -244,7 +245,7 @@ function analyzeGroupClinch(groupMatches,fifaRanks){
     scenario.forEach(m=>clinchApplyResult(table,m.home,m.away,m.hg,m.ag));
     clinchRankGroup(table).forEach((t,idx)=>positionSets[t.id].add(idx));
   }
-  if(bailedOut) return {finished:false,top2:[],eliminated:[],undetermined:teamIds};
+  if(bailedOut) return {finished:false,top2:[],eliminated:[],undetermined:teamIds,pos1:null,pos2:null};
   const top2=[],eliminated=[],undetermined=[];
   teamIds.forEach(id=>{
     const positions=positionSets[id];
@@ -252,7 +253,15 @@ function analyzeGroupClinch(groupMatches,fifaRanks){
     else if([...positions].every(p=>p>=2)) eliminated.push(id);
     else undetermined.push(id);
   });
-  return {finished:false,top2,eliminated,undetermined};
+  // Per-SPECIFIC-position lock: a team is locked into position 1 (resp. 2)
+  // only if EVERY simulated scenario puts them at exactly that index — not
+  // merely "somewhere in the top 2". Two teams can both be guaranteed to
+  // finish top-2 while it's still undecided which of them is 1st vs 2nd
+  // (e.g. they play each other in the final matchday) — top2.includes()
+  // alone can't distinguish that case, which is exactly the bug this fixes.
+  const pos1=teamIds.find(id=>{const p=positionSets[id]; return p.size>0 && [...p].every(x=>x===0);})||null;
+  const pos2=teamIds.find(id=>{const p=positionSets[id]; return p.size>0 && [...p].every(x=>x===1);})||null;
+  return {finished:false,top2,eliminated,undetermined,pos1,pos2};
 }
 // Cache: re-run analysis once per group per render cycle, not once
 // per bracket slot (each group is queried up to twice — pos 1 and pos 2)
@@ -292,14 +301,21 @@ window.debugClinch=function(){
   return out;
 };
 
-// Returns {teamId, locked, gp} — locked=true only when that team's
-// top-2 status is mathematically guaranteed (see analyzeGroupClinch above)
+// Returns {teamId, locked, gp} — locked=true only when that team is
+// mathematically guaranteed to occupy this EXACT position (1st or 2nd),
+// not merely guaranteed to finish somewhere in the top 2. Those are
+// different conditions: e.g. two teams can both be guaranteed to
+// qualify while it's still undecided which one finishes 1st vs 2nd
+// (typically because they play each other on the final matchday) —
+// in that case neither team's specific slot is locked yet, even
+// though both teams individually show up in the group's top2 list.
 function resolveGroupPos(grp,pos){
   const table=standings(grp);
   if(!table[pos-1]) return null;
   const teamId=table[pos-1].id;
   const analysis=getClinchAnalysis(grp);
-  const locked=analysis.top2.includes(teamId);
+  const lockedTeamId=pos===1?analysis.pos1:analysis.pos2;
+  const locked=lockedTeamId===teamId;
   return {teamId, locked, gp:table[pos-1].gp};
 }
 
