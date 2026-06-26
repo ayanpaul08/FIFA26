@@ -137,12 +137,16 @@ a{text-decoration:none;color:inherit}
 /* ── KNOCKOUT BRACKET ──────────────────────── */
 .bracket-note{font-size:.7rem;color:var(--muted);margin:-.6rem 0 1.2rem;letter-spacing:.02em}
 .bracket-scroll{overflow-x:auto;padding-bottom:1rem}
-.bracket{display:grid;grid-template-columns:240px 240px 240px 240px;gap:0 1.6rem;min-width:1100px;align-items:center}
-.br-col{display:flex;flex-direction:column;gap:1rem;justify-content:center;height:100%}
-.br-col-label{font-family:'Bebas Neue',sans-serif;font-size:.85rem;letter-spacing:.06em;color:var(--gold);text-align:center;margin-bottom:.4rem;grid-row:1}
-.br-match{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;font-size:.78rem;position:relative}
+#bracket-grid{position:relative}
+.br-svg{overflow:visible}
+.br-svg path{fill:none;stroke:var(--border);stroke-width:1.5px}
+.br-col-label{position:absolute;font-family:'Bebas Neue',sans-serif;font-size:.8rem;letter-spacing:.06em;color:var(--gold);text-align:center;top:0}
+.br-match-wrap{position:absolute}
+.br-match{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;font-size:.78rem;height:64px;display:flex;flex-direction:column;justify-content:center;position:relative}
+.br-mid{position:absolute;left:-28px;top:50%;transform:translateY(-50%);font-size:.62rem;font-weight:700;color:var(--muted);text-decoration:underline;text-decoration-color:rgba(74,112,144,.4)}
 .br-match.br-final{border-color:var(--gold);box-shadow:0 0 0 1px rgba(255,215,0,.15)}
-.br-slot{display:flex;align-items:center;gap:.5rem;padding:.5rem .65rem;border-bottom:1px solid var(--border)}
+.br-final-wrap{z-index:2}
+.br-slot{display:flex;align-items:center;gap:.5rem;padding:.42rem .65rem;border-bottom:1px solid var(--border)}
 .br-slot:last-child{border-bottom:none}
 .br-slot.br-resolved{background:rgba(0,230,118,.05)}
 .br-slot.br-pending{color:var(--muted)}
@@ -1264,6 +1268,48 @@ function renderBracketSlot(resolved,pendingLabel){
   return `<div class="br-slot br-pending"><span class="br-name">${pendingLabel}</span></div>`;
 }
 
+// ── Bracket-tree geometry ──────────────────────────────────────
+// A real bracket isn't a set of independent columns — each match box
+// must be vertically centered against the midpoint of the TWO boxes
+// that feed it, with a connector line joining them. This computes
+// that geometry explicitly rather than relying on CSS grid/flex
+// (which can't express "center against two specific siblings").
+const BR_BOX_H=64;      // match box height in px (must match .br-match min-height below)
+const BR_R32_GAP=14;    // vertical gap between adjacent R32 boxes within a pair... 
+const BR_PAIR_GAP=34;   // ...and the larger gap between pairs
+const BR_COL_W=230;     // width of one column slot
+const BR_COL_GAP=70;    // horizontal gap between columns (room for connector lines)
+
+// Returns the list of vertical centers (px, top-down) for n boxes laid
+// out as the LEAVES of a bracket (R32): tightly paired, larger gap
+// between pairs, so each pair's midpoint lines up with one R16 slot.
+function br32Centers(n){
+  const centers=[];
+  let y=BR_BOX_H/2;
+  for(let i=0;i<n;i++){
+    centers.push(y);
+    const isLastOfPair=(i%2===1);
+    y+=BR_BOX_H+(isLastOfPair?BR_PAIR_GAP:BR_R32_GAP);
+  }
+  return centers;
+}
+// Given the previous round's centers, returns this round's centers —
+// each one is the midpoint of two consecutive previous-round centers.
+function brNextCenters(prevCenters){
+  const out=[];
+  for(let i=0;i<prevCenters.length;i+=2){
+    out.push((prevCenters[i]+prevCenters[i+1])/2);
+  }
+  return out;
+}
+// SVG path connecting a box at (x1,cy1) to a box at (x2,cy2): a simple
+// elbow connector — horizontal, then vertical, then horizontal again,
+// meeting at the midpoint between the two columns (matches FIFA's style).
+function brConnector(x1,cy1,x2,cy2){
+  const midX=(x1+x2)/2;
+  return `<path d="M ${x1} ${cy1} H ${midX} V ${cy2} H ${x2}" />`;
+}
+
 function renderBracket(){
   const grid=document.getElementById('bracket-grid');
   if(!grid) return;
@@ -1273,11 +1319,12 @@ function renderBracket(){
   if(noteEl){
     noteEl.textContent=groupsComplete
       ?'Group stage complete — bracket slots locked in'
-      :'Slots fill in once a team\'s qualification is mathematically guaranteed — calculated live using FIFA\'s 2026 tiebreaker rules. Third-place qualifiers are confirmed once all group matches end.';
+      :"Slots fill in once a team's qualification is mathematically guaranteed — calculated live using FIFA's 2026 tiebreaker rules. Third-place qualifiers are confirmed once all group matches end.";
   }
 
-  // Build R32 slot HTML
-  const r32Html=BRACKET_R32.map(slot=>{
+  // Build R32 match HTML, keyed by id.
+  const r32HtmlById={};
+  BRACKET_R32.forEach(slot=>{
     let homeHtml,awayHtml;
     if(slot.home.pos<=2){
       const r=resolveGroupPos(slot.home.grp,slot.home.pos);
@@ -1291,38 +1338,109 @@ function renderBracket(){
     } else {
       awayHtml=renderBracketSlot(null,`3rd: ${slot.away.pool.join('/')}`);
     }
-    // If this R32 match has actually been played (rare in Phase 1, future-proofed)
     const playedMatch=MATCHES.find(m=>m.id===slot.id&&m.st!=='NS');
     let metaHtml='';
     if(playedMatch){
       metaHtml=`<div class="br-meta"><span>${playedMatch.st==='LIVE'?'<span class="br-live">LIVE</span>':'Full Time'}</span><span>${playedMatch.hs}–${playedMatch.as}</span></div>`;
     }
-    return `<div class="br-match" data-id="${slot.id}">${homeHtml}${awayHtml}${metaHtml}</div>`;
+    r32HtmlById[slot.id]=`<span class="br-mid">${slot.id}</span><div class="br-match" data-id="${slot.id}">${homeHtml}${awayHtml}${metaHtml}</div>`;
   });
-
-  // QF/SF/Final — Phase 1 shows these as TBD until R32 resolves (future phase will chain winners)
-  function renderLater(r){
-    return `<div class="br-match ${r.round==='F'?'br-final':''}" data-id="${r.id}">
+  function renderLater(id){
+    const r=BRACKET_LATER.find(x=>x.id===id);
+    return `<span class="br-mid">${r.id}</span><div class="br-match ${r.round==='F'?'br-final':''}" data-id="${r.id}">
       <div class="br-slot br-pending"><span class="br-name">Winner ${r.from[0]}</span></div>
       <div class="br-slot br-pending"><span class="br-name">Winner ${r.from[1]}</span></div>
     </div>`;
   }
-  // Filter on each entry's own `round` field, NOT on substring-matching the
-  // rendered HTML — the Final's markup contains the text "Winner SF1/SF2",
-  // so an HTML-string .includes('SF') check would wrongly match the Final
-  // itself and render it twice (once in its own section, once under SF).
-  const qfHtml=BRACKET_LATER.filter(r=>r.round==='QF').map(renderLater).join('');
-  const sfHtml=BRACKET_LATER.filter(r=>r.round==='SF').map(renderLater).join('');
-  const finalHtml=BRACKET_LATER.filter(r=>r.round==='F').map(renderLater).join('');
 
+  // Bracket order on each side, top-to-bottom, matching FIFA's actual
+  // layout — pair (2i, 2i+1) of one round feeds box i of the next round.
+  const leftR32=['M74','M77','M73','M75','M83','M84','M81','M82'];
+  const leftR16=['M89','M90','M93','M94'];
+  const leftQF=['M97','M98'];
+  const rightR32=['M76','M78','M79','M80','M86','M88','M85','M87'];
+  const rightR16=['M91','M92','M95','M96'];
+  const rightQF=['M99','M100'];
+
+  const r32Centers=br32Centers(8);
+  const r16Centers=brNextCenters(r32Centers);
+  const qfCenters=brNextCenters(r16Centers);
+  const sfCenters=qfCenters; // SF1/SF2 sit at the same height as their feeding QF pair midpoint
+  const finalCenter=(sfCenters[0]+sfCenters[1])/2;
+  const totalHeight=r32Centers[r32Centers.length-1]+BR_BOX_H/2+20;
+
+  // Column x-positions (left edge of each column), 7 columns total.
+  const colX=[0,1,2,3,4,5,6].map(i=>i*(BR_COL_W+BR_COL_GAP));
+  const [xR32L,xR16L,xQFL,xMid,xQFR,xR16R,xR32R]=colX;
+
+  function col(ids,htmlById,x,centers){
+    return ids.map((id,i)=>`<div class="br-match-wrap" style="left:${x}px;top:${centers[i]-BR_BOX_H/2}px;width:${BR_COL_W}px">${htmlById[id]}</div>`).join('');
+  }
+
+  const r16HtmlById={}; leftR16.concat(rightR16).forEach(id=>r16HtmlById[id]=renderLater(id));
+  const qfHtmlById={}; leftQF.concat(rightQF).forEach(id=>qfHtmlById[id]=renderLater(id));
+
+  const leftR32Html=col(leftR32,r32HtmlById,xR32L,r32Centers);
+  const leftR16Html=col(leftR16,r16HtmlById,xR16L,r16Centers);
+  const leftQFHtml=col(leftQF,qfHtmlById,xQFL,qfCenters);
+  const rightQFHtml=col(rightQF,qfHtmlById,xQFR,qfCenters);
+  const rightR16Html=col(rightR16,r16HtmlById,xR16R,r16Centers);
+  const rightR32Html=col(rightR32,r32HtmlById,xR32R,r32Centers);
+
+  const sfHtml=
+    `<div class="br-match-wrap" style="left:${xMid}px;top:${sfCenters[0]-BR_BOX_H/2}px;width:${BR_COL_W}px">${renderLater('M101')}</div>` +
+    `<div class="br-match-wrap" style="left:${xMid}px;top:${sfCenters[1]-BR_BOX_H/2}px;width:${BR_COL_W}px">${renderLater('M102')}</div>`;
+  const finalHtml=`<div class="br-match-wrap br-final-wrap" style="left:${xMid}px;top:${finalCenter-BR_BOX_H/2}px;width:${BR_COL_W}px">${renderLater('M104')}</div>`;
+
+  const labels=[
+    {x:xR32L,t:'ROUND OF 32'},{x:xR16L,t:'ROUND OF 16'},{x:xQFL,t:'QUARTERFINALS'},
+    {x:xMid,t:'FINAL',y:finalCenter-BR_BOX_H/2-30},
+    {x:xMid,t:'SEMI-FINAL',y:sfCenters[0]-BR_BOX_H/2-22},
+    {x:xMid,t:'SEMI-FINAL',y:sfCenters[1]-BR_BOX_H/2-22},
+    {x:xQFR,t:'QUARTERFINALS'},{x:xR16R,t:'ROUND OF 16'},{x:xR32R,t:'ROUND OF 32'},
+  ];
+  const labelsHtml=labels.map(l=>`<div class="br-col-label" style="left:${l.x}px;width:${BR_COL_W}px${l.y!==undefined?`;top:${l.y}px`:''}">${l.t}</div>`).join('');
+
+  // Connector lines: each pair of boxes in round N connects to the
+  // single box they feed in round N+1.
+  let svgPaths='';
+  function connectLeft(xFrom,centersFrom,idxA,idxB,xTo,centerTo){
+    svgPaths+=brConnector(xFrom+BR_COL_W,centersFrom[idxA],xTo,centerTo);
+    svgPaths+=brConnector(xFrom+BR_COL_W,centersFrom[idxB],xTo,centerTo);
+  }
+  function connectRight(xFrom,centersFrom,idxA,idxB,xTo,centerTo){
+    // Right side is mirrored: the feeding boxes are to the RIGHT of the
+    // box they feed, so the line runs from the next-round box's right
+    // edge back out to each feeder's left edge.
+    svgPaths+=brConnector(xTo+BR_COL_W,centerTo,xFrom,centersFrom[idxA]);
+    svgPaths+=brConnector(xTo+BR_COL_W,centerTo,xFrom,centersFrom[idxB]);
+  }
+  for(let i=0;i<leftR16.length;i++) connectLeft(xR32L,r32Centers,i*2,i*2+1,xR16L,r16Centers[i]);
+  for(let i=0;i<leftQF.length;i++) connectLeft(xR16L,r16Centers,i*2,i*2+1,xQFL,qfCenters[i]);
+  for(let i=0;i<rightR16.length;i++) connectRight(xR32R,r32Centers,i*2,i*2+1,xR16R,r16Centers[i]);
+  for(let i=0;i<rightQF.length;i++) connectRight(xR16R,r16Centers,i*2,i*2+1,xQFR,qfCenters[i]);
+  // QF -> SF: each side's single QF winner feeds one SF box directly
+  // (same height, since sfCenters===qfCenters by construction above).
+  svgPaths+=brConnector(xQFL+BR_COL_W,qfCenters[0],xMid,sfCenters[0]);
+  svgPaths+=brConnector(xQFL+BR_COL_W,qfCenters[1],xMid,sfCenters[1]);
+  svgPaths+=brConnector(xMid+BR_COL_W,sfCenters[0],xQFR,qfCenters[0]);
+  svgPaths+=brConnector(xMid+BR_COL_W,sfCenters[1],xQFR,qfCenters[1]);
+  // SF -> Final: Final sits in the SAME column as SF1/SF2, vertically
+  // between them — simple straight vertical connectors, not the
+  // horizontal-first elbow used for cross-column connections.
+  svgPaths+=`<path d="M ${xMid+BR_COL_W/2} ${sfCenters[0]+BR_BOX_H/2} V ${finalCenter-BR_BOX_H/2-8}" />`;
+  svgPaths+=`<path d="M ${xMid+BR_COL_W/2} ${sfCenters[1]-BR_BOX_H/2} V ${finalCenter+BR_BOX_H/2+8}" />`;
+
+  const totalWidth=xR32R+BR_COL_W+20;
+  grid.style.position='relative';
+  grid.style.width=totalWidth+'px';
+  grid.style.height=(totalHeight+40)+'px';
   grid.innerHTML=`
-    <div class="br-col"><div class="br-col-label">ROUND OF 32</div>${r32Html.slice(0,8).join('')}</div>
-    <div class="br-col"><div class="br-col-label">QUARTERFINALS</div>${qfHtml}</div>
-    <div class="br-col">
-      <div class="br-col-label">FINAL</div>${finalHtml}
-      <div class="br-col-label" style="margin-top:1.4rem">SEMIFINALS</div>${sfHtml}
+    <svg class="br-svg" width="${totalWidth}" height="${totalHeight+40}" style="position:absolute;top:30px;left:0;pointer-events:none">${svgPaths}</svg>
+    <div class="br-labels" style="position:absolute;top:0;left:0;width:100%">${labelsHtml}</div>
+    <div class="br-boxes" style="position:absolute;top:30px;left:0">
+      ${leftR32Html}${leftR16Html}${leftQFHtml}${sfHtml}${finalHtml}${rightQFHtml}${rightR16Html}${rightR32Html}
     </div>
-    <div class="br-col"><div class="br-col-label">ROUND OF 32</div>${r32Html.slice(8,16).join('')}</div>
   `;
 }
 
