@@ -275,11 +275,32 @@ function parseEvents(data){
     return[{home:hId,away:aId,
       hs:state!=='pre'?parseInt(hc.score||0):null,
       as:state!=='pre'?parseInt(ac.score||0):null,
-      st:state==='post'?'FT':state==='in'?'LIVE':'NS',clock}];
+      st:state==='post'?'FT':state==='in'?'LIVE':'NS',clock,espnId:ev.id}];
   });
 }
 async function fetchAllRecent(){
-  const days=[-2,-1,0,1].map(o=>{const d=new Date(Date.now()+o*86400000);return d.toISOString().slice(0,10).replace(/-/g,'')});
+  const datesToFetch=new Set();
+
+  // Standard rolling window: 3 days back + today + tomorrow
+  [-3,-2,-1,0,1].forEach(o=>{
+    const d=new Date(Date.now()+o*86400000);
+    datesToFetch.add(d.toISOString().slice(0,10).replace(/-/g,''));
+  });
+
+  // Also fetch the specific date of ANY match that hasn't received an espnId
+  // yet (covers old matches that fell outside the rolling window before
+  // getting their ID — without this, a match can get permanently stuck at
+  // st:'NS' forever if it's ever missed once, since there's no other path
+  // back into the fetch window for a date that's already in the past).
+  const tomorrow=new Date(Date.now()+86400000);
+  MATCHES.filter(m=>GROUPS.includes(m.grp)&&!m.espnId).forEach(m=>{
+    const d=new Date(m.utc);
+    if(d<=tomorrow){
+      datesToFetch.add(d.toISOString().slice(0,10).replace(/-/g,''));
+    }
+  });
+
+  const days=[...datesToFetch];
   const all=[];
   const res=await Promise.allSettled(days.map(ds=>fetchDate(ds)));
   res.forEach((r,i)=>{if(r.status==='fulfilled')all.push(...parseEvents(r.value));});
@@ -291,6 +312,7 @@ function patchMatches(live){
     const m=MATCHES.find(m=>GROUPS.includes(m.grp)&&m.home===r.home&&m.away===r.away);
     if(!m)return;
     if(m.st!==r.st||m.hs!==r.hs||m.as!==r.as){m.st=r.st;m.hs=r.hs;m.as=r.as;changed=true;}
+    if(r.espnId&&!m.espnId) m.espnId=r.espnId;
   });
   return changed;
 }
