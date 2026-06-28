@@ -210,6 +210,7 @@ a{text-decoration:none;color:inherit}
 </div>
 
 <script src="js/data.js"></script>
+<script src="js/clinch.js"></script>
 <script src="js/app.js"></script>
 <script>
 // ═══════════════════════════════════════════
@@ -217,6 +218,11 @@ a{text-decoration:none;color:inherit}
 // ═══════════════════════════════════════════
 const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard';
 const GROUPS = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+// Knockout-stage grp values, in the same MATCHES array as group matches.
+// Used so a team's fixture list keeps tracking their matches through
+// the knockout rounds instead of stopping at the group stage.
+const KO_STAGES = ['R32','R16','QF','SF','3P','FIN'];
+const ALL_STAGES = [...GROUPS, ...KO_STAGES];
 
 const ESPN_MAP = {
   'Mexico':'mexico','South Africa':'south_africa','Korea Republic':'south_korea',
@@ -293,7 +299,7 @@ async function fetchAllRecent(){
   // st:'NS' forever if it's ever missed once, since there's no other path
   // back into the fetch window for a date that's already in the past).
   const tomorrow=new Date(Date.now()+86400000);
-  MATCHES.filter(m=>GROUPS.includes(m.grp)&&!m.espnId).forEach(m=>{
+  MATCHES.filter(m=>ALL_STAGES.includes(m.grp)&&!m.espnId).forEach(m=>{
     const d=new Date(m.utc);
     if(d<=tomorrow){
       datesToFetch.add(d.toISOString().slice(0,10).replace(/-/g,''));
@@ -309,7 +315,7 @@ async function fetchAllRecent(){
 function patchMatches(live){
   let changed=false;
   live.forEach(r=>{
-    const m=MATCHES.find(m=>GROUPS.includes(m.grp)&&m.home===r.home&&m.away===r.away);
+    const m=MATCHES.find(m=>ALL_STAGES.includes(m.grp)&&m.home===r.home&&m.away===r.away);
     if(!m)return;
     if(m.st!==r.st||m.hs!==r.hs||m.as!==r.as){m.st=r.st;m.hs=r.hs;m.as=r.as;changed=true;}
     if(r.espnId&&!m.espnId) m.espnId=r.espnId;
@@ -380,11 +386,40 @@ function renderFixtures(tid){
   // Clear existing timers
   Object.entries(cdTimers).forEach(([id,t])=>{clearInterval(t);delete cdTimers[id]});
 
-  const tm=MATCHES.filter(m=>(m.home===tid||m.away===tid)&&GROUPS.includes(m.grp));
+  // Direct matches: this team is literally m.home/m.away in MATCHES.
+  // Covers group stage (always) and R32 (now that data.js has real
+  // team ids for R32 instead of "tbd", once R32_CONFIRMED resolved them).
+  const directMatches=MATCHES.filter(m=>(m.home===tid||m.away===tid)&&ALL_STAGES.includes(m.grp));
+  const directIds=new Set(directMatches.map(m=>m.id));
+
+  // Knockout matches where this team has ADVANCED INTO the slot via a
+  // prior round's result, but that round's own MATCHES row still says
+  // home/away:"tbd" (only resolved dynamically through BRACKET_LATER's
+  // winner-chain, not written back into MATCHES itself). Walks every
+  // R16+ match and checks whether tid is the resolved winner of either
+  // feeder match — if so, synthesizes a fixture entry for it.
+  const laterMatches=[];
+  if(typeof BRACKET_LATER!=='undefined'){
+    BRACKET_LATER.forEach(r=>{
+      if(directIds.has(r.id)) return; // already covered above
+      const getter=r.round==='3P'?getMatchLoser:getMatchWinner;
+      const homeId=getter(r.from[0]);
+      const awayId=getter(r.from[1]);
+      if(homeId===tid||awayId===tid){
+        const baseMatch=MATCHES.find(m=>m.id===r.id);
+        if(baseMatch){
+          laterMatches.push({...baseMatch, home:homeId||'tbd', away:awayId||'tbd', _oppPending:!homeId||!awayId});
+        }
+      }
+    });
+  }
+
+  const tm=[...directMatches,...laterMatches].sort((a,b)=>new Date(a.utc)-new Date(b.utc));
 
   document.getElementById('fixtures').innerHTML=tm.map((m,i)=>{
     const isH=m.home===tid;
-    const opp=TEAMS[isH?m.away:m.home];
+    const oppId=isH?m.away:m.home;
+    const opp=TEAMS[oppId]; // may be undefined if opponent ('tbd') isn't resolved yet
     const isFT=m.st==='FT', isLive=m.st==='LIVE', isNS=m.st==='NS';
     const T=TEAMS[tid];
 
@@ -400,9 +435,13 @@ function renderFixtures(tid){
       rightHtml=`<div class="fx-cd" id="fcd-${m.id}"></div>`;
     }
 
+    const oppLabel=opp
+      ?`${opp.flag} <a href="team.html?team=${oppId}">${opp.name}</a>`
+      :`<span style="color:var(--muted)">Opponent TBD</span>`; // other semifinalist not decided yet
+
     const teamLine=isH
-      ?`<strong>${T.flag} ${T.name}</strong> vs ${opp.flag} <a href="team.html?team=${isH?m.away:m.home}">${opp.name}</a>`
-      :`${opp.flag} <a href="team.html?team=${isH?m.away:m.home}">${opp.name}</a> vs <strong>${T.flag} ${T.name}</strong>`;
+      ?`<strong>${T.flag} ${T.name}</strong> vs ${oppLabel}`
+      :`${oppLabel} vs <strong>${T.flag} ${T.name}</strong>`;
 
     return`<div class="fx-row" style="--fx-c:${fxColors[i%3]}">
       <div class="fx-time">${fmtIST(m.utc)}</div>
@@ -510,7 +549,7 @@ function setTStatus(mode,msg){
   // ── ESPN POLLING ──────────────────────────
   let pollTimer=null;
   function nextInterval(){
-    const gm=MATCHES.filter(m=>GROUPS.includes(m.grp));
+    const gm=MATCHES.filter(m=>ALL_STAGES.includes(m.grp));
     if(gm.some(m=>m.st==='LIVE'))return 30000;
     const now=Date.now();
     if(gm.some(m=>m.st==='NS'&&Math.abs(new Date(m.utc)-now)<3*3600000))return 60000;

@@ -144,8 +144,11 @@ a{text-decoration:none;color:inherit}
 .br-match-wrap{position:absolute}
 .br-match{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;font-size:.78rem;height:64px;display:flex;flex-direction:column;justify-content:center;position:relative}
 .br-mid{position:absolute;left:-28px;top:50%;transform:translateY(-50%);font-size:.62rem;font-weight:700;color:var(--muted);text-decoration:underline;text-decoration-color:rgba(74,112,144,.4)}
+.br-date{position:absolute;top:-18px;left:0;width:100%;font-size:.6rem;color:var(--muted);letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .br-match.br-final{border-color:var(--gold);box-shadow:0 0 0 1px rgba(255,215,0,.15)}
 .br-final-wrap{z-index:2}
+.br-third-wrap{opacity:.75}
+.br-third-wrap .br-match{border-style:dashed}
 .br-slot{display:flex;align-items:center;gap:.5rem;padding:.42rem .65rem;border-bottom:1px solid var(--border)}
 .br-slot:last-child{border-bottom:none}
 .br-slot.br-resolved{background:rgba(0,230,118,.05)}
@@ -433,6 +436,13 @@ a{text-decoration:none;color:inherit}
 
 const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard';
 const GROUPS = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+// Knockout-stage grp values, in the same MATCHES array as group matches.
+// Used wherever logic should track EVERY real match through the
+// tournament's end (live status, polling cadence, today's/recent
+// cards) — NOT for group-standings-table logic, which is genuinely
+// group-only and should keep using GROUPS directly.
+const KO_STAGES = ['R32','R16','QF','SF','3P','FIN'];
+const ALL_STAGES = [...GROUPS, ...KO_STAGES];
 
 // Map every possible ESPN name / abbreviation → our team ID
 const ESPN_MAP = {
@@ -586,7 +596,7 @@ async function fetchAllRecent(){
 function patchMatches(live){
   let changed=false;
   live.forEach(r=>{
-    const m=MATCHES.find(m=>GROUPS.includes(m.grp)&&m.home===r.home&&m.away===r.away);
+    const m=MATCHES.find(m=>ALL_STAGES.includes(m.grp)&&m.home===r.home&&m.away===r.away);
     if(!m) return;
     if(m.st!==r.st||m.hs!==r.hs||m.as!==r.as){
       // If match just ended, clear stats cache so summary gets re-fetched with final data
@@ -608,7 +618,7 @@ function patchMatches(live){
 
 // ── Smart interval: faster when live ─────────────
 function nextInterval(){
-  const gm=MATCHES.filter(m=>GROUPS.includes(m.grp));
+  const gm=MATCHES.filter(m=>ALL_STAGES.includes(m.grp));
   if(gm.some(m=>m.st==='LIVE'))           return 30_000;   // 30s  — match in progress
   const now=Date.now();
   const soonNS=gm.some(m=>m.st==='NS'&&Math.abs(new Date(m.utc)-now)<3*3600_000);
@@ -745,6 +755,13 @@ window.flipCard=function(el){
   }
 };
 
+// Maps a match's grp field to its display label — "GROUP A" for group
+// stage, or the proper round name for knockout matches (so a R32/QF/FIN
+// match doesn't render as the literal nonsense "GROUP R32").
+function stageLabel(grp){
+  const KO_LABELS={R32:'ROUND OF 32',R16:'ROUND OF 16',QF:'QUARTER-FINAL',SF:'SEMI-FINAL',['3P']:'3RD PLACE PLAY-OFF',FIN:'FINAL'};
+  return KO_LABELS[grp]||`GROUP ${grp}`;
+}
 function buildCardFront(m,h,a,c1,c2){
   const isFT=m.st==='FT',isNS=m.st==='NS',isLive=m.st==='LIVE';
   const stTxt=isFT?'Full Time':isLive?(m.clock?m.clock+' 🔴':'🔴 Live'):fmtTime(m.utc)+' '+getTZLabel();
@@ -759,7 +776,7 @@ function buildCardFront(m,h,a,c1,c2){
     <div class="mc-dark"></div>
     <div class="mc-body">
       <div class="mc-top">
-        <span class="mc-grp">GROUP ${m.grp}</span>
+        <span class="mc-grp">${stageLabel(m.grp)}</span>
         <span class="mc-st ${stCls}">${stTxt}</span>
       </div>
       <div class="mc-teams">
@@ -838,7 +855,7 @@ function buildCardBack(m,h,a,c1,c2){
 
   const inner=!hasAnyData
     ?`<div class="mb-score-line">
-        <span class="mb-grp-lbl">${isLive?'🔴 ':''}GROUP ${m.grp} · ${statusTxt}</span>
+        <span class="mb-grp-lbl">${isLive?'🔴 ':''}${stageLabel(m.grp)} · ${statusTxt}</span>
         <span class="mb-score-big">${m.hs} – ${m.as}</span>
       </div>
       <div class="mb-no-data">
@@ -847,7 +864,7 @@ function buildCardBack(m,h,a,c1,c2){
       </div>
       <div class="mb-flip-back">TAP TO FLIP</div>`
     :`<div class="mb-score-line">
-        <span class="mb-grp-lbl" style="${isLive?'color:var(--red)':''}">${isLive?'🔴 ':''}GROUP ${m.grp} · ${statusTxt}</span>
+        <span class="mb-grp-lbl" style="${isLive?'color:var(--red)':''}">${isLive?'🔴 ':''}${stageLabel(m.grp)} · ${statusTxt}</span>
         <span class="mb-score-big">${m.hs} – ${m.as}</span>
       </div>
       <div class="mb-teams-lbl"><span>${h.flag} ${h.name}</span><span>${a.flag} ${a.name}</span></div>
@@ -909,7 +926,7 @@ function buildNSCardBack(m,h,a,c1,c2){
 
   return `<div class="mc-clip mc-clip-back" style="background:${backBg}">
     <div class="ns-back-header">
-      <span class="ns-back-title">GROUP ${m.grp} · MATCH PREVIEW</span>
+      <span class="ns-back-title">${stageLabel(m.grp)} · MATCH PREVIEW</span>
     </div>
     <div class="ns-section-lbl">WIN PROBABILITY <span class="ns-disclaimer">based on FIFA rankings</span></div>
     <div class="wp-bars">
@@ -947,7 +964,7 @@ function buildCard(m){
       <div class="mc-dark"></div>
       <div class="mc-body">
         <div class="mc-top">
-          <span class="mc-grp">GROUP ${m.grp}</span>
+          <span class="mc-grp">${stageLabel(m.grp)}</span>
           <span class="mc-st">${fmtTime(m.utc)} IST</span>
         </div>
         <div class="mc-teams">
@@ -972,7 +989,7 @@ function buildCard(m){
   return `<div class="mc" style="--mc-grad:${grad}">
     <div class="mc-bg"></div><div class="mc-dark"></div>
     <div class="mc-body">
-      <div class="mc-top"><span class="mc-grp">GROUP ${m.grp}</span><span class="mc-st live">${m.clock?m.clock+' 🔴':'🔴 Live'}</span></div>
+      <div class="mc-top"><span class="mc-grp">${stageLabel(m.grp)}</span><span class="mc-st live">${m.clock?m.clock+' 🔴':'🔴 Live'}</span></div>
       <div class="mc-teams">
         <div class="mc-team"><div class="mc-flag">${h.flag}</div><div class="mc-nm"><a href="team.html?team=${m.home}">${h.name}</a></div></div>
         <div class="mc-mid"><div class="mc-score">${m.hs}<span class="s"> – </span>${m.as}</div></div>
@@ -1268,6 +1285,19 @@ function renderBracketSlot(resolved,pendingLabel){
   return `<div class="br-slot br-pending"><span class="br-name">${pendingLabel}</span></div>`;
 }
 
+// Formats a knockout match's kickoff as "Sat 28 Jun, 02:30 PM" in the
+// user's local timezone. Returns '' if the match id isn't found (so
+// callers can skip rendering the date row entirely rather than show
+// a broken string).
+function koDateLabel(matchId){
+  const m=MATCHES.find(x=>x.id===matchId);
+  if(!m||!m.utc) return '';
+  const d=new Date(m.utc);
+  const datePart=d.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',timeZone:USER_TZ}).replace(',','');
+  const timePart=d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true,timeZone:USER_TZ}).toUpperCase();
+  return `${datePart}, ${timePart}`;
+}
+
 // ── Bracket-tree geometry ──────────────────────────────────────
 // A real bracket isn't a set of independent columns — each match box
 // must be vertically centered against the midpoint of the TWO boxes
@@ -1275,7 +1305,7 @@ function renderBracketSlot(resolved,pendingLabel){
 // that geometry explicitly rather than relying on CSS grid/flex
 // (which can't express "center against two specific siblings").
 const BR_BOX_H=64;      // match box height in px (must match .br-match min-height below)
-const BR_R32_GAP=14;    // vertical gap between adjacent R32 boxes within a pair... 
+const BR_R32_GAP=22;    // vertical gap between adjacent R32 boxes within a pair (widened to fit the date label above each box)
 const BR_PAIR_GAP=34;   // ...and the larger gap between pairs
 const BR_COL_W=230;     // width of one column slot
 const BR_COL_GAP=70;    // horizontal gap between columns (room for connector lines)
@@ -1325,32 +1355,33 @@ function renderBracket(){
   // Build R32 match HTML, keyed by id.
   const r32HtmlById={};
   BRACKET_R32.forEach(slot=>{
-    let homeHtml,awayHtml;
-    if(slot.home.pos<=2){
-      const r=resolveGroupPos(slot.home.grp,slot.home.pos);
-      homeHtml=renderBracketSlot(r,`${slot.home.pos}${slot.home.grp}`);
-    } else {
-      homeHtml=renderBracketSlot(null,`3rd: ${slot.home.pool.join('/')}`);
-    }
-    if(slot.away.pos<=2){
-      const r=resolveGroupPos(slot.away.grp,slot.away.pos);
-      awayHtml=renderBracketSlot(r,`${slot.away.pos}${slot.away.grp}`);
-    } else {
-      awayHtml=renderBracketSlot(null,`3rd: ${slot.away.pool.join('/')}`);
-    }
+    const resolved=resolveR32Match(slot);
+    const homeHtml=resolved.home
+      ? renderBracketSlot(resolved.home, slot.home.pos<=2?`${slot.home.pos}${slot.home.grp}`:`3rd: ${slot.home.pool.join('/')}`)
+      : renderBracketSlot(null, slot.home.pos<=2?`${slot.home.pos}${slot.home.grp}`:`3rd: ${slot.home.pool.join('/')}`);
+    const awayHtml=resolved.away
+      ? renderBracketSlot(resolved.away, slot.away.pos<=2?`${slot.away.pos}${slot.away.grp}`:`3rd: ${slot.away.pool.join('/')}`)
+      : renderBracketSlot(null, slot.away.pos<=2?`${slot.away.pos}${slot.away.grp}`:`3rd: ${slot.away.pool.join('/')}`);
     const playedMatch=MATCHES.find(m=>m.id===slot.id&&m.st!=='NS');
     let metaHtml='';
     if(playedMatch){
       metaHtml=`<div class="br-meta"><span>${playedMatch.st==='LIVE'?'<span class="br-live">LIVE</span>':'Full Time'}</span><span>${playedMatch.hs}–${playedMatch.as}</span></div>`;
     }
-    r32HtmlById[slot.id]=`<span class="br-mid">${slot.id}</span><div class="br-match" data-id="${slot.id}">${homeHtml}${awayHtml}${metaHtml}</div>`;
+    const dateLabel=koDateLabel(slot.id);
+    r32HtmlById[slot.id]=`<span class="br-mid">${slot.id}</span>${dateLabel?`<div class="br-date">${dateLabel}</div>`:''}<div class="br-match" data-id="${slot.id}">${homeHtml}${awayHtml}${metaHtml}</div>`;
   });
   function renderLater(id){
     const r=BRACKET_LATER.find(x=>x.id===id);
-    return `<span class="br-mid">${r.id}</span><div class="br-match ${r.round==='F'?'br-final':''}" data-id="${r.id}">
-      <div class="br-slot br-pending"><span class="br-name">Winner ${r.from[0]}</span></div>
-      <div class="br-slot br-pending"><span class="br-name">Winner ${r.from[1]}</span></div>
-    </div>`;
+    const resolved=resolveLaterMatch(id);
+    const verb=r.round==='3P'?'Loser':'Winner';
+    const homeHtml=resolved?.home
+      ? renderBracketSlot({teamId:resolved.home,locked:true}, `${verb} ${r.from[0]}`)
+      : renderBracketSlot(null, `${verb} ${r.from[0]}`);
+    const awayHtml=resolved?.away
+      ? renderBracketSlot({teamId:resolved.away,locked:true}, `${verb} ${r.from[1]}`)
+      : renderBracketSlot(null, `${verb} ${r.from[1]}`);
+    const dateLabel=koDateLabel(r.id);
+    return `<span class="br-mid">${r.id}</span>${dateLabel?`<div class="br-date">${dateLabel}</div>`:''}<div class="br-match ${r.round==='F'?'br-final':''}" data-id="${r.id}">${homeHtml}${awayHtml}</div>`;
   }
 
   // Bracket order on each side, top-to-bottom, matching FIFA's actual
@@ -1367,7 +1398,7 @@ function renderBracket(){
   const qfCenters=brNextCenters(r16Centers);
   const sfCenters=qfCenters; // SF1/SF2 sit at the same height as their feeding QF pair midpoint
   const finalCenter=(sfCenters[0]+sfCenters[1])/2;
-  const totalHeight=r32Centers[r32Centers.length-1]+BR_BOX_H/2+20;
+  const totalHeightBase=r32Centers[r32Centers.length-1]+BR_BOX_H/2+20;
 
   // Column x-positions (left edge of each column), 7 columns total.
   const colX=[0,1,2,3,4,5,6].map(i=>i*(BR_COL_W+BR_COL_GAP));
@@ -1391,12 +1422,20 @@ function renderBracket(){
     `<div class="br-match-wrap" style="left:${xMid}px;top:${sfCenters[0]-BR_BOX_H/2}px;width:${BR_COL_W}px">${renderLater('M101')}</div>` +
     `<div class="br-match-wrap" style="left:${xMid}px;top:${sfCenters[1]-BR_BOX_H/2}px;width:${BR_COL_W}px">${renderLater('M102')}</div>`;
   const finalHtml=`<div class="br-match-wrap br-final-wrap" style="left:${xMid}px;top:${finalCenter-BR_BOX_H/2}px;width:${BR_COL_W}px">${renderLater('M104')}</div>`;
+  // Third-place playoff sits below SF2, clearly separated from the main
+  // bracket flow (no connector lines into it) — matches FIFA's own
+  // reference layout, which places "Play-off for third place" at the
+  // bottom of the middle column.
+  const thirdPlaceTop=sfCenters[1]+BR_BOX_H/2+50;
+  const thirdPlaceHtml=`<div class="br-match-wrap br-third-wrap" style="left:${xMid}px;top:${thirdPlaceTop}px;width:${BR_COL_W}px">${renderLater('M103')}</div>`;
+  const totalHeight=Math.max(totalHeightBase, thirdPlaceTop+BR_BOX_H+20);
 
   const labels=[
     {x:xR32L,t:'ROUND OF 32'},{x:xR16L,t:'ROUND OF 16'},{x:xQFL,t:'QUARTERFINALS'},
-    {x:xMid,t:'FINAL',y:finalCenter-BR_BOX_H/2-30},
-    {x:xMid,t:'SEMI-FINAL',y:sfCenters[0]-BR_BOX_H/2-22},
-    {x:xMid,t:'SEMI-FINAL',y:sfCenters[1]-BR_BOX_H/2-22},
+    {x:xMid,t:'FINAL',y:finalCenter-BR_BOX_H/2-48},
+    {x:xMid,t:'SEMI-FINAL',y:sfCenters[0]-BR_BOX_H/2-40},
+    {x:xMid,t:'SEMI-FINAL',y:sfCenters[1]-BR_BOX_H/2-40},
+    {x:xMid,t:'3RD PLACE PLAY-OFF',y:thirdPlaceTop-40},
     {x:xQFR,t:'QUARTERFINALS'},{x:xR16R,t:'ROUND OF 16'},{x:xR32R,t:'ROUND OF 32'},
   ];
   const labelsHtml=labels.map(l=>`<div class="br-col-label" style="left:${l.x}px;width:${BR_COL_W}px${l.y!==undefined?`;top:${l.y}px`:''}">${l.t}</div>`).join('');
@@ -1439,7 +1478,7 @@ function renderBracket(){
     <svg class="br-svg" width="${totalWidth}" height="${totalHeight+40}" style="position:absolute;top:30px;left:0;pointer-events:none">${svgPaths}</svg>
     <div class="br-labels" style="position:absolute;top:0;left:0;width:100%">${labelsHtml}</div>
     <div class="br-boxes" style="position:absolute;top:30px;left:0">
-      ${leftR32Html}${leftR16Html}${leftQFHtml}${sfHtml}${finalHtml}${rightQFHtml}${rightR16Html}${rightR32Html}
+      ${leftR32Html}${leftR16Html}${leftQFHtml}${sfHtml}${finalHtml}${thirdPlaceHtml}${rightQFHtml}${rightR16Html}${rightR32Html}
     </div>
   `;
 }
@@ -1454,7 +1493,7 @@ function renderAll(){
   // Clear existing countdown timers
   Object.values(cdTimers).forEach(clearInterval);
 
-  const gm=MATCHES.filter(m=>GROUPS.includes(m.grp));
+  const gm=MATCHES.filter(m=>ALL_STAGES.includes(m.grp));
   const ft=gm.filter(m=>m.st==='FT');
   const live=gm.filter(m=>m.st==='LIVE');
   // Exclude NS matches whose kickoff was >3h ago — these are stale (ESPN didn't update us yet)
@@ -1612,7 +1651,7 @@ async function poll(){
 
   renderAll();
 
-  const isLiveNow=MATCHES.some(m=>GROUPS.includes(m.grp)&&m.st==='LIVE');
+  const isLiveNow=MATCHES.some(m=>ALL_STAGES.includes(m.grp)&&m.st==='LIVE');
   const ms=nextInterval();
 
   // Left label: 🔴 Live Match OR "Next match in Xh Ym"
