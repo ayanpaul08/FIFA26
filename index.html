@@ -154,7 +154,7 @@ a{text-decoration:none;color:inherit}
 .br-slot.br-resolved{background:rgba(0,230,118,.05)}
 .br-slot.br-pending{color:var(--muted)}
 .br-flag{font-size:1rem;flex-shrink:0}
-.br-name{flex:1;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.74rem}
+.br-name{flex:1;min-width:0;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.74rem}
 .br-pending .br-name{font-weight:600;color:var(--muted);font-size:.66rem;letter-spacing:.01em}
 .br-score{font-family:'Orbitron',monospace;font-weight:900;color:var(--gold);font-size:.78rem;min-width:18px;text-align:right}
 .br-meta{font-size:.6rem;color:var(--muted);padding:.3rem .65rem;border-top:1px solid var(--border);display:flex;justify-content:space-between}
@@ -562,7 +562,6 @@ function parseEvents(data){
 // Fetch recent window + any match dates missing espnId (regardless of age)
 // This ensures old matches like June 12 still get their event IDs and summary data
 async function fetchAllRecent(){
-  const GRPS=['A','B','C','D','E','F','G','H','I','J','K','L'];
   const datesToFetch=new Set();
 
   // Standard rolling window: 3 days back + today + tomorrow
@@ -574,7 +573,7 @@ async function fetchAllRecent(){
   // Also fetch the specific date of ANY match that hasn't received an espnId yet
   // (covers old matches that fell outside the rolling window before getting their ID)
   const tomorrow=new Date(Date.now()+86400000);
-  MATCHES.filter(m=>GRPS.includes(m.grp)&&!m.espnId).forEach(m=>{
+  MATCHES.filter(m=>ALL_STAGES.includes(m.grp)&&!m.espnId).forEach(m=>{
     const d=new Date(m.utc);
     if(d<=tomorrow){ // skip future matches beyond tomorrow
       datesToFetch.add(d.toISOString().slice(0,10).replace(/-/g,''));
@@ -636,8 +635,7 @@ let nextTimer=null, nextTick=0;
 
 // Compute "Next match in Xh Ym" from upcoming NS matches
 function nextMatchLabel(){
-  const GRPS=['A','B','C','D','E','F','G','H','I','J','K','L'];
-  const upcoming=MATCHES.filter(m=>GRPS.includes(m.grp)&&m.st==='NS')
+  const upcoming=MATCHES.filter(m=>ALL_STAGES.includes(m.grp)&&m.st==='NS')
     .sort((a,b)=>new Date(a.utc)-new Date(b.utc));
   if(!upcoming.length) return 'No upcoming matches';
   const diffMs=new Date(upcoming[0].utc)-Date.now();
@@ -1151,8 +1149,7 @@ function updateCardBack(m){
 // After each ESPN poll, fetch summary stats for FT matches that don't have them yet
 const _statsFetched=new Set();
 async function fetchPendingStats(){
-  const GRPS=['A','B','C','D','E','F','G','H','I','J','K','L'];
-  const ftAll=MATCHES.filter(m=>GRPS.includes(m.grp)&&(m.st==='FT'||m.st==='LIVE'));
+  const ftAll=MATCHES.filter(m=>ALL_STAGES.includes(m.grp)&&(m.st==='FT'||m.st==='LIVE'));
   const noId=ftAll.filter(m=>!m.espnId);
   const pending=ftAll.filter(m=>m.espnId&&!m.stats&&!_statsFetched.has(m.espnId));
 
@@ -1202,8 +1199,7 @@ const FIFA_CODE={
 // Golden Boot — top 3 scorers from match scorer data
 function getTopScorers(){
   const tally={};
-  const GRPS=['A','B','C','D','E','F','G','H','I','J','K','L'];
-  MATCHES.filter(m=>GRPS.includes(m.grp)&&m.st==='FT').forEach(m=>{
+  MATCHES.filter(m=>ALL_STAGES.includes(m.grp)&&m.st==='FT').forEach(m=>{
     if(!m.scorers) return;
     m.scorers.home.filter(s=>!s.og&&s.player).forEach(s=>{
       if(!tally[s.player]) tally[s.player]={g:0,tid:m.home};
@@ -1243,17 +1239,16 @@ function renderAwardChip(elId, entries){
 //  LIVE TOURNAMENT STATS
 // ══════════════════════════════════════════════════
 function computeAndRenderStats(){
-  const GRPS=['A','B','C','D','E','F','G','H','I','J','K','L'];
-  const ft=MATCHES.filter(m=>GRPS.includes(m.grp)&&m.st==='FT');
-  const live=MATCHES.filter(m=>GRPS.includes(m.grp)&&m.st==='LIVE');
+  const ft=MATCHES.filter(m=>ALL_STAGES.includes(m.grp)&&m.st==='FT');
+  const live=MATCHES.filter(m=>ALL_STAGES.includes(m.grp)&&m.st==='LIVE');
   const goals=ft.reduce((s,m)=>s+(m.hs||0)+(m.as||0),0)
              +live.reduce((s,m)=>s+(m.hs||0)+(m.as||0),0);
   const played=ft.length;
 
-  // Cards — count from ALL group matches with card data (FT + LIVE)
+  // Cards — count from ALL matches (group + knockout) with card data (FT + LIVE)
   // This was the original working approach; restricting to ft[] broke red card detection
   let yellow=0, red=0;
-  MATCHES.filter(m=>GRPS.includes(m.grp)).forEach(m=>{
+  MATCHES.filter(m=>ALL_STAGES.includes(m.grp)).forEach(m=>{
     if(m.cards?.length){
       yellow+=m.cards.filter(c=>c.color==='yellow').length;
       red   +=m.cards.filter(c=>c.color==='red').length;
@@ -1265,7 +1260,7 @@ function computeAndRenderStats(){
 
   const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
   set('st-goals',  goals||'–');
-  set('st-played', played?`${played}/72`:'–');
+  set('st-played', played?`${played}/104`:'–');
   set('st-yellow', yellow||'–');
   set('st-red',    red||'–');
 
