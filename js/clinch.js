@@ -40,35 +40,6 @@ function standings(grp){
 // modeled as "vs 3rd-place pool" when it's actually "vs Group F
 // runner-up"), and (2) the Round of 16 was missing entirely, with QF
 // wrongly built directly from R32 winners. Both are fixed below.
-// ── CONFIRMED Round of 32 matchups (group stage + 3rd-place rankings
-// are now fully decided) ──────────────────────────────────────────
-// Sourced directly from the live official bracket (screenshots of a
-// FotMob-style bracket view, 28 June 2026) and cross-verified against
-// ESPN, Sky Sports, Yahoo Sports, and Al Jazeera's group-stage wrap-ups
-// — all five sources agree on every single pairing below. This is a
-// manual, point-in-time mapping: it's correct for THIS tournament's
-// actual final group standings, but is NOT a general algorithm (FIFA's
-// real 3rd-place allocation uses a 495-combination lookup table this
-// does not implement). If group results from a future tournament or a
-// reset dataset ever change, this table would need rebuilding by hand.
-const R32_CONFIRMED={
-  M73:['south_africa','canada'],
-  M74:['germany','paraguay'],
-  M75:['netherlands','morocco'],
-  M76:['brazil','japan'],
-  M77:['france','sweden'],
-  M78:['ivory_coast','norway'],
-  M79:['mexico','ecuador'],
-  M80:['england','dr_congo'],
-  M81:['usa','bosnia'],
-  M82:['belgium','senegal'],
-  M83:['portugal','croatia'],
-  M84:['spain','austria'],
-  M85:['switzerland','algeria'],
-  M86:['argentina','cape_verde'],
-  M87:['colombia','ghana'],
-  M88:['australia','egypt'],
-};
 const BRACKET_R32=[
   {id:'M73', home:{grp:'A',pos:2}, away:{grp:'B',pos:2}},
   {id:'M74', home:{grp:'E',pos:1}, away:{pos:3,pool:['A','B','C','D','F']}},
@@ -104,7 +75,6 @@ const BRACKET_LATER=[
   {round:'QF', id:'M100',from:['M95','M96']},
   {round:'SF', id:'M101',from:['M97','M98']},
   {round:'SF', id:'M102',from:['M99','M100']},
-  {round:'3P', id:'M103',from:['M101','M102']}, // third-place playoff: LOSERS of the two semis, not winners
   {round:'F',  id:'M104',from:['M101','M102']},
 ];
 
@@ -349,33 +319,6 @@ function resolveGroupPos(grp,pos){
   return {teamId, locked, gp:table[pos-1].gp};
 }
 
-// Resolves an R32 slot's home/away teams. Checks the hardcoded
-// R32_CONFIRMED table first (see above) — if the match id is listed
-// there, both teams are returned as locked immediately, bypassing the
-// dynamic pool-resolution logic entirely. Falls back to the normal
-// resolveGroupPos()-based dynamic resolution for anything not in that
-// table (keeps this safe even if R32_CONFIRMED is incomplete or a
-// future dataset reset removes it).
-function resolveR32Side(side){
-  if(side.pos<=2){
-    return resolveGroupPos(side.grp,side.pos);
-  }
-  return null; // 3rd-place pool slot, no dynamic resolution implemented
-}
-function resolveR32Match(slot){
-  const confirmed=R32_CONFIRMED[slot.id];
-  if(confirmed){
-    return {
-      home:{teamId:confirmed[0],locked:true},
-      away:{teamId:confirmed[1],locked:true},
-    };
-  }
-  return {
-    home:resolveR32Side(slot.home),
-    away:resolveR32Side(slot.away),
-  };
-}
-
 function allGroupsComplete(){
   const GRPS=['A','B','C','D','E','F','G','H','I','J','K','L'];
   return GRPS.every(g=>{
@@ -383,44 +326,3 @@ function allGroupsComplete(){
     return gm.length>0&&gm.every(m=>m.st!=='NS');
   });
 }
-
-// ── Knockout winner resolution (R16 onward) ────────────────────
-// Once an R32 (or later) match is finished, this looks at the actual
-// MATCHES result to determine the winner, so R16/QF/SF/Final slots
-// can show real team names instead of "Winner M74" placeholders —
-// fetched live from ESPN the same way group-stage scores are.
-//
-// KNOWN GAP: knockout matches can't end in a draw (extra time + penalty
-// shootout decide a winner), but this only compares m.hs/m.as. If
-// ESPN's reported score for a shootout-decided match is NOT already
-// the literal winning margin (e.g. it reports the 90-minute score as
-// level and the shootout result separately), this will fail to pick
-// a winner and the slot will correctly stay "pending" rather than
-// guess — but it won't show the real winner either until that's
-// addressed. Untested against real knockout data since the tournament
-// hasn't reached this stage yet.
-function getMatchWinner(matchId){
-  const m=MATCHES.find(x=>x.id===matchId);
-  if(!m||m.st!=='FT'||m.hs==null||m.as==null) return null;
-  if(m.hs>m.as) return m.home;
-  if(m.as>m.hs) return m.away;
-  return null; // drawn scoreline with no shootout data available — can't safely pick a winner
-}
-// Mirrors getMatchWinner for the third-place playoff, which is fed by
-// the two SEMIFINAL LOSERS rather than winners.
-function getMatchLoser(matchId){
-  const m=MATCHES.find(x=>x.id===matchId);
-  if(!m||m.st!=='FT'||m.hs==null||m.as==null) return null;
-  if(m.hs>m.as) return m.away;
-  if(m.as>m.hs) return m.home;
-  return null; // drawn scoreline with no shootout data available — can't safely pick a loser either
-}
-// Resolves a single BRACKET_LATER entry's two feeder slots into either
-// real team ids (if that feeder match has finished) or null (pending).
-function resolveLaterMatch(id){
-  const r=BRACKET_LATER.find(x=>x.id===id);
-  if(!r) return null;
-  const getter=r.round==='3P'?getMatchLoser:getMatchWinner;
-  return {home:getter(r.from[0]), away:getter(r.from[1])};
-}
-
