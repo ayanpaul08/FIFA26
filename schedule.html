@@ -371,16 +371,33 @@ function resolveKoSide(side){
   return {text:`3rd: ${side.pool.join('/')}`, locked:false};
 }
 // Builds a resolved-as-far-as-possible "Home vs Away" label for an R32
-// match id — each side shows a real team name once mathematically
-// locked, or its placeholder (e.g. "1A", "3rd: C/E/F/H/I") otherwise.
-// Falls back to the original static label only if BRACKET_R32 has no
-// mapping for this id (shouldn't happen for real R32 ids).
+// match id. Checks the hardcoded R32_CONFIRMED table first (js/clinch.js
+// — group stage + 3rd-place rankings are now fully decided for this
+// tournament), falling back to dynamic per-side resolution otherwise.
 function resolveKoLabel(matchId,fallbackLabel){
+  const confirmed=R32_CONFIRMED[matchId];
+  if(confirmed){
+    const h=TEAMS[confirmed[0]], a=TEAMS[confirmed[1]];
+    return `${h?`${h.flag} ${h.name}`:confirmed[0]} vs ${a?`${a.flag} ${a.name}`:confirmed[1]}`;
+  }
   const slot=BRACKET_R32.find(s=>s.id===matchId);
   if(!slot) return fallbackLabel;
   const home=resolveKoSide(slot.home);
   const away=resolveKoSide(slot.away);
   return `${home.text} vs ${away.text}`;
+}
+// Builds a resolved-as-far-as-possible label for an R16/QF/SF/Final
+// match id, using resolveLaterMatch (js/clinch.js) to check whether
+// each feeder match has finished. Falls back to "Winner Mxx" text for
+// any side still pending.
+function resolveLaterLabel(matchId,fallbackLabel){
+  const r=BRACKET_LATER.find(x=>x.id===matchId);
+  if(!r) return fallbackLabel;
+  const resolved=resolveLaterMatch(matchId);
+  const verb=r.round==='3P'?'Loser':'Winner';
+  const homeText=resolved?.home?(TEAMS[resolved.home]?`${TEAMS[resolved.home].flag} ${TEAMS[resolved.home].name}`:resolved.home):`${verb} ${r.from[0]}`;
+  const awayText=resolved?.away?(TEAMS[resolved.away]?`${TEAMS[resolved.away].flag} ${TEAMS[resolved.away].name}`:resolved.away):`${verb} ${r.from[1]}`;
+  return `${homeText} vs ${awayText}`;
 }
 function renderKnockout(){
   const stages=[
@@ -397,10 +414,9 @@ function renderKnockout(){
     html+=`<div class="ko-stage" style="color:${c}">${l}</div>`;
     ms.forEach(m=>{
       const ist=new Date(m.utc).toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:true,timeZone:USER_TZ})+' '+getTZLabel();
-      // R32 slots resolve per-side as groups finish (same engine as
-      // index.html's bracket). R16+ stay as static labels for now since
-      // they depend on R32 results, which haven't been played yet.
-      const label=(k==='R32')?resolveKoLabel(m.id,m.label||'TBD vs TBD'):(m.label||'TBD vs TBD');
+      // R32 slots resolve via R32_CONFIRMED (group stage is done).
+      // R16/QF/SF/Final resolve live once their feeder matches finish.
+      const label=(k==='R32')?resolveKoLabel(m.id,m.label||'TBD vs TBD'):resolveLaterLabel(m.id,m.label||'TBD vs TBD');
       html+=`<div class="ko-row" style="--ko-c:${c}">
         <div class="ko-label">${label}</div>
         <div class="ko-time">🕐 ${ist}</div>
