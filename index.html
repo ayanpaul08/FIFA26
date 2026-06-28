@@ -397,6 +397,11 @@ a{text-decoration:none;color:inherit}
   <div class="sh" id="today-lbl">TODAY'S MATCHES</div>
   <div class="mgrid" id="today-matches"></div>
 
+  <div style="margin-top:2.5rem;display:none" id="upcoming-wrap">
+    <div class="sh" id="upcoming-lbl">TODAY'S MATCHES</div>
+    <div class="mgrid" id="upcoming-matches"></div>
+  </div>
+
   <div style="margin-top:2.5rem" id="results-wrap">
     <div class="sh">RECENT RESULTS</div>
     <div id="recent-matches"></div>
@@ -1521,14 +1526,34 @@ function renderAll(){
 
   const tlbl=document.getElementById('today-lbl');
   const tel=document.getElementById('today-matches');
+  const ulbl=document.getElementById('upcoming-lbl');
+  const uel=document.getElementById('upcoming-matches');
+  const uwrap=document.getElementById('upcoming-wrap');
+
+  // "LIVE NOW" — always just the live matches, on their own, never mixed
+  // with upcoming fixtures (a match can be live AND something else can
+  // be upcoming later the same day — these must stay visually distinct).
   if(live.length){
     tlbl.textContent='LIVE NOW';
-    tel.innerHTML=[...live,...today].map(buildCard).join('');
+    tel.innerHTML=live.map(buildCard).join('');
   } else if(today.length){
+    // No live match: today's/next-day's matches take the primary slot.
     tlbl.textContent=upcomingLabel;
     tel.innerHTML=today.map(buildCard).join('');
   } else {
-    tel.innerHTML='<div style="color:var(--muted);padding:2rem;text-align:center;background:var(--card);border-radius:14px;font-size:.9rem;">No group stage matches today — check the <a href="schedule.html" style="color:var(--gold)">full schedule</a></div>';
+    tel.innerHTML='<div style="color:var(--muted);padding:2rem;text-align:center;background:var(--card);border-radius:14px;font-size:.9rem;">No matches scheduled right now — check the <a href="schedule.html" style="color:var(--gold)">full schedule</a></div>';
+  }
+
+  // Second section: shown ONLY when there's a live match AND something
+  // separately upcoming (today/next day) — otherwise the primary section
+  // above already covers it, and this stays hidden to avoid an empty block.
+  if(live.length&&today.length){
+    uwrap.style.display='';
+    ulbl.textContent=upcomingLabel;
+    uel.innerHTML=today.map(buildCard).join('');
+  } else {
+    uwrap.style.display='none';
+    uel.innerHTML='';
   }
 
   // Recent results — latest day always visible, older days collapse below a button
