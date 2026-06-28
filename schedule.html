@@ -405,30 +405,98 @@ function resolveLaterLabel(matchId,fallbackLabel){
   const awayText=resolved?.away?(TEAMS[resolved.away]?`${TEAMS[resolved.away].flag} ${TEAMS[resolved.away].name}`:resolved.away):`${verb} ${r.from[1]}`;
   return `${homeText} vs ${awayText}`;
 }
+
+// Round labels/colors for knockout sub-headers within each date block
+// (mirrors gColors' per-group coloring, but for knockout rounds).
+const koRoundMeta={
+  R32:{l:'Round of 32',c:'var(--blue)'}, R16:{l:'Round of 16',c:'var(--green)'},
+  QF:{l:'Quarter-Final',c:'var(--gold)'}, SF:{l:'Semi-Final',c:'#FF8C00'},
+  ['3P']:{l:'3rd Place Play-off',c:'var(--muted)'}, FIN:{l:'Final',c:'var(--gold)'},
+};
+// Resolves one side of a knockout match into displayable {flag,name,teamId,locked}
+// or a pending placeholder string — used by buildKoRow below. Mirrors the
+// resolution chains already used for the bracket/label text (R32_CONFIRMED
+// for R32, resolveGroupPos for direct group positions, resolveLaterMatch's
+// winner/loser chain for R16+), but returns structured data instead of a
+// pre-joined "Home vs Away" string, since this row format needs each side
+// rendered separately (its own flag, name, and team-page link).
+function resolveKoTeam(m,isHome){
+  // R32: resolve via the hardcoded confirmed table (covers every real
+  // R32 match now that the group stage + 3rd-place rankings are done).
+  if(m.grp==='R32'){
+    const confirmed=R32_CONFIRMED[m.id];
+    if(confirmed){
+      const teamId=isHome?confirmed[0]:confirmed[1];
+      const t=TEAMS[teamId];
+      return t?{flag:t.flag,name:t.name,teamId,locked:true}:{flag:'',name:teamId,teamId,locked:true};
+    }
+    // Not in the table (shouldn't happen for a real R32 id) — fall back
+    // to the slot's own pending placeholder text, no team link.
+    const slot=BRACKET_R32.find(s=>s.id===m.id);
+    const side=slot?(isHome?slot.home:slot.away):null;
+    const label=side?(side.pos<=2?`${side.pos}${side.grp}`:`3rd: ${side.pool.join('/')}`):'TBD';
+    return {flag:'',name:label,teamId:null,locked:false};
+  }
+  // R16+: resolve via the winner/loser chain.
+  const resolved=resolveLaterMatch(m.id);
+  const r=BRACKET_LATER.find(x=>x.id===m.id);
+  const verb=r&&r.round==='3P'?'Loser':'Winner';
+  const teamId=resolved?(isHome?resolved.home:resolved.away):null;
+  if(teamId){
+    const t=TEAMS[teamId];
+    return t?{flag:t.flag,name:t.name,teamId,locked:true}:{flag:'',name:teamId,teamId,locked:true};
+  }
+  const fromId=r?(isHome?r.from[0]:r.from[1]):'?';
+  return {flag:'',name:`${verb} ${fromId}`,teamId:null,locked:false};
+}
+// Builds one knockout row in the SAME visual format as buildRow() (group
+// stage rows): time on the left (bold time + small date/round line below),
+// flags+names in the middle (linked to team pages once resolved), score/FT
+// badge on the right via the existing buildScoreCell().
+function buildKoRow(m){
+  const home=resolveKoTeam(m,true), away=resolveKoTeam(m,false);
+  const meta=koRoundMeta[m.grp]||{l:m.grp,c:'#666'};
+  const homeHtml=home.teamId
+    ?`${home.flag} <a href="team.html?team=${home.teamId}">${home.name}</a>`
+    :`<span style="color:var(--muted)">${home.name}</span>`;
+  const awayHtml=away.teamId
+    ?`${away.flag} <a href="team.html?team=${away.teamId}">${away.name}</a>`
+    :`<span style="color:var(--muted)">${away.name}</span>`;
+  return`<div class="sr" id="sr-${m.id}" style="--sr-c:${meta.c}">
+    <div class="sr-time">${fmtTime(m.utc)}<small>${fmtShort(m.utc)} · ${meta.l}</small></div>
+    <div class="sr-teams">
+      <div class="sr-team">${homeHtml}</div>
+      <span class="sr-vs">vs</span>
+      <div class="sr-team">${awayHtml}</div>
+    </div>
+    <div id="sc-${m.id}">${buildScoreCell(m)}</div>
+  </div>`;
+}
+// Renders the Knockout tab grouped by date, exactly like
+// renderGroupSchedule() groups the Group Stage tab — a date header per
+// day, with each day's matches (across whichever rounds fall on it)
+// listed chronologically underneath.
 function renderKnockout(){
-  const stages=[
-    {k:'R32',l:'Round of 32',c:'var(--blue)'},
-    {k:'R16',l:'Round of 16',c:'var(--green)'},
-    {k:'QF', l:'Quarter-Finals',c:'var(--gold)'},
-    {k:'SF', l:'Semi-Finals',c:'#FF8C00'},
-    {k:'3P', l:'Third Place Play-off',c:'var(--muted)'},
-    {k:'FIN',l:'🏆 THE FINAL',c:'var(--gold)'},
-  ];
+  const km=[...MATCHES.filter(m=>KO_STAGES.includes(m.grp))]
+    .sort((a,b)=>new Date(a.utc)-new Date(b.utc));
+
+  const nowIST=new Date();
+  const todayKey=`${nowIST.getUTCFullYear()}-${String(nowIST.getUTCMonth()+1).padStart(2,'0')}-${String(nowIST.getUTCDate()).padStart(2,'0')}`;
+
+  const byKey={};
+  km.forEach(m=>{
+    const k=getLocalDateKey(m.utc);
+    if(!byKey[k])byKey[k]={label:fmtDateLong(m.utc),matches:[]};
+    byKey[k].matches.push(m);
+  });
+
   let html='';
-  stages.forEach(({k,l,c})=>{
-    const ms=MATCHES.filter(m=>m.grp===k);if(!ms.length)return;
-    html+=`<div class="ko-stage" style="color:${c}">${l}</div>`;
-    ms.forEach(m=>{
-      const ist=new Date(m.utc).toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:true,timeZone:USER_TZ})+' '+getTZLabel();
-      // R32 slots resolve via R32_CONFIRMED (group stage is done).
-      // R16/QF/SF/Final resolve live once their feeder matches finish.
-      const label=(k==='R32')?resolveKoLabel(m.id,m.label||'TBD vs TBD'):resolveLaterLabel(m.id,m.label||'TBD vs TBD');
-      html+=`<div class="ko-row" style="--ko-c:${c}">
-        <div class="ko-label">${label}</div>
-        <div class="ko-time">🕐 ${ist}</div>
-        <div class="ko-venue">📍 ${m.venue}</div>
-      </div>`;
-    });
+  Object.entries(byKey).forEach(([k,{label,matches}])=>{
+    const isToday=k===todayKey;
+    html+=`<div class="day-block" data-date="${k}">
+      <div class="day-hd">${label}${isToday?' <span class="today-pill">TODAY</span>':''}</div>
+      ${matches.map(buildKoRow).join('')}
+    </div>`;
   });
   document.getElementById('tab-ko').innerHTML=html;
 }
